@@ -8,6 +8,7 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY server.js ./
 COPY public ./public
+COPY seed ./seed
 
 RUN mkdir -p /data && chown node:node /data
 USER node

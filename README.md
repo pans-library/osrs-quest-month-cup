@@ -104,7 +104,8 @@ Deleting the app can also delete its volume, and the cup's history with it. Back
 
 - `https://cup.example.com/` shows the scoreboard.
 - `https://cup.example.com/healthz` returns `{"ok":true}`.
-- Click **Organiser** at the bottom of the page, enter your `ADMIN_TOKEN`, and add players (by RSN) and the first quest.
+- Click **Organiser** at the bottom of the page, enter your `ADMIN_TOKEN`, and add players by RSN. Quests from the seed file (see below) are already there.
+- The organiser tools include a ready-to-paste **message for your friends** and, separately, the exact **Dink webhook link** with a copy button. Post the message in your group chat; send the link to each player privately.
 
 To check the webhook before any quest releases, send a fake completion and confirm it appears in the organiser's "Quests seen" list. Set `CUP_START` to a past date while you test:
 
@@ -113,6 +114,27 @@ curl -X POST https://cup.example.com/hook/<WEBHOOK_TOKEN> \
   -H 'content-type: application/json' \
   -d '{"type":"QUEST","playerName":"Your RSN","extra":{"questName":"Test Quest"}}'
 ```
+
+## Preloaded quests
+
+`seed/quests.json` lists quests to load on launch, so a fresh install starts with the cup's quests already on the board:
+
+```json
+{
+  "quests": [
+    { "name": "The Graveyard", "wikiUrl": "https://oldschool.runescape.wiki/w/The_Graveyard" },
+    { "name": "Another Quest", "releaseDate": "2026-11-12" }
+  ]
+}
+```
+
+- `name` must match the in-game quest name, since that's what Dink reports.
+- `wikiUrl` and `releaseDate` (`YYYY-MM-DD`) are optional. Without `wikiUrl`, the quest links to the wiki page named after it.
+- Each quest is added once. If the organiser removes a seeded quest, it stays removed after restarts. Quests added to the file in a later image appear on the next restart.
+
+The image ships with this repository's seed file. To use your own, mount a file and point `SEED_FILE` at it, for example `-v ./my-quests.json:/seed.json:ro -e SEED_FILE=/seed.json`.
+
+The organiser can also change any quest's release date and wiki link from its card. Wiki links must point to `https://oldschool.runescape.wiki/`.
 
 ## Player setup (Dink)
 
@@ -151,6 +173,7 @@ Dependabot checks weekly for new versions of the Node base image, the pinned `cl
 | `CUP_START`     | no       | `2026-11-01T00:00:00Z`  | Ignore completions before this time |
 | `PORT`          | no       | `8080`                  | Listen port inside the container |
 | `DATA_DIR`      | no       | `/data`                 | Where `cup.sqlite` lives |
+| `SEED_FILE`     | no       | `seed/quests.json` in the image | Quests to preload, see Preloaded quests |
 | `TUNNEL_TOKEN`  | compose  |                         | Cloudflare Tunnel token for the bundled cloudflared |
 
 ## Local development
@@ -164,3 +187,5 @@ Use Node 26 to match the container. `.node-version` pins it for fnm, mise, noden
 ---
 
 Not affiliated with Jagex, RuneLite or the Dink project. Old School RuneScape is a trademark of Jagex Ltd.
+
+The trophy icon is [Trophy cup](https://game-icons.net/1x1/delapouite/trophy-cup.html) by Delapouite from [game-icons.net](https://game-icons.net), used under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and recoloured.

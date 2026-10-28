@@ -13,6 +13,8 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const CUP_START = process.env.CUP_START || '2026-11-01T00:00:00Z'; // ignore quest events before this
+const SEED_FILE = process.env.SEED_FILE || path.join(__dirname, 'seed', 'quests.json');
+const WIKI_BASE = 'https://oldschool.runescape.wiki/w/';
 const MAX_BODY = 12 * 1024 * 1024; // Dink screenshots are capped at 8 MB
 
 if (WEBHOOK_TOKEN.length < 16 || ADMIN_TOKEN.length < 16) {
@@ -34,16 +36,61 @@ db.exec(`
     quest_name TEXT NOT NULL, quest_norm TEXT NOT NULL, at TEXT NOT NULL,
     source TEXT NOT NULL, seasonal INTEGER NOT NULL DEFAULT 0, payload TEXT);
   CREATE INDEX IF NOT EXISTS events_quest ON events (quest_norm, at);
+  CREATE TABLE IF NOT EXISTS seed_log (name_norm TEXT PRIMARY KEY, applied_at TEXT NOT NULL);
 `);
+// Migrations for databases created by earlier versions.
+if (!db.prepare('PRAGMA table_info(quests)').all().some(c => c.name === 'wiki_url')) {
+  db.exec("ALTER TABLE quests ADD COLUMN wiki_url TEXT NOT NULL DEFAULT ''");
+}
 
 // RSNs can arrive with spaces, underscores, hyphens or non-breaking spaces.
 const norm = (s) => String(s || '').normalize('NFKC').replace(/[\s_\- ]+/g, ' ').trim().toLowerCase();
 const nowIso = () => new Date().toISOString();
+const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+
+// Wiki page for a quest: an explicit override, or the wiki's own title convention.
+const wikiFor = (name) => WIKI_BASE + encodeURIComponent(String(name).trim().replace(/ /g, '_'));
+function cleanWiki(url) {
+  if (!url) return '';
+  let u;
+  try { u = new URL(String(url)); } catch { throw new UserError('Wiki link must be a full https://oldschool.runescape.wiki/ address.'); }
+  if (u.protocol !== 'https:' || u.hostname !== 'oldschool.runescape.wiki') {
+    throw new UserError('Wiki link must point to https://oldschool.runescape.wiki/.');
+  }
+  return u.href;
+}
+class UserError extends Error {}
+
+/* ---------- seed ---------- */
+// Quests in the seed file are added once each. A seeded quest the organiser later
+// removes stays removed, and quests added to the file in a newer image appear on restart.
+function applySeed() {
+  if (!fs.existsSync(SEED_FILE)) return;
+  let seed;
+  try { seed = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8')); }
+  catch (e) { console.error(`Seed file ${SEED_FILE} is not valid JSON: ${e.message}`); return; }
+  const seen = db.prepare('SELECT 1 FROM seed_log WHERE name_norm = ?');
+  const addQuest = db.prepare(`INSERT OR IGNORE INTO quests (name, name_norm, release_date, wiki_url, created_at)
+    VALUES (?, ?, ?, ?, ?)`);
+  const log = db.prepare('INSERT INTO seed_log (name_norm, applied_at) VALUES (?, ?)');
+  let added = 0;
+  for (const q of Array.isArray(seed.quests) ? seed.quests : []) {
+    const n = norm(q && q.name);
+    if (!n || seen.get(n)) continue;
+    let wiki = '';
+    try { wiki = cleanWiki(q.wikiUrl); } catch (e) { console.error(`Seed quest "${q.name}": ${e.message}`); }
+    added += addQuest.run(String(q.name).trim(), n, isDate(q.releaseDate) ? q.releaseDate : '', wiki, nowIso()).changes;
+    log.run(n, nowIso());
+  }
+  if (added) console.log(`Seeded ${added} quest${added === 1 ? '' : 's'} from ${SEED_FILE}`);
+}
+applySeed();
 
 /* ---------- state ---------- */
 function state(includeAdmin) {
   const players = db.prepare('SELECT id, rsn FROM players ORDER BY rsn COLLATE NOCASE').all();
-  const quests = db.prepare('SELECT id, name, release_date AS releaseDate, created_at AS createdAt FROM quests').all();
+  const quests = db.prepare('SELECT id, name, release_date AS releaseDate, wiki_url, created_at AS createdAt FROM quests').all()
+    .map(({ wiki_url, ...q }) => ({ ...q, wikiUrl: wiki_url || wikiFor(q.name), wikiCustom: !!wiki_url }));
   const roster = new Map(db.prepare('SELECT id, rsn_norm FROM players').all().map(p => [p.rsn_norm, p.id]));
 
   // First qualifying event per (quest, player), in time order.
@@ -62,6 +109,7 @@ function state(includeAdmin) {
 
   const out = { players, quests, finishes, cupStart: CUP_START, admin: !!includeAdmin };
   if (includeAdmin) {
+    out.hookPath = '/hook/' + WEBHOOK_TOKEN; // shown only to the organiser, for sharing with players
     // Quest names seen from roster players that aren't on the cup list yet.
     const known = new Set(db.prepare('SELECT name_norm FROM quests').all().map(r => r.name_norm));
     const rows = db.prepare(`SELECT quest_name AS name, quest_norm, COUNT(*) AS n, MIN(at) AS firstAt FROM events
@@ -108,6 +156,13 @@ function recordDink(p) {
 
 /* ---------- http ---------- */
 const PUBLIC = path.join(__dirname, 'public');
+// Fixed allowlist of static files; nothing else under public/ is reachable by path.
+const ICONS = {
+  '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
+  '/favicon-32.png': ['favicon-32.png', 'image/png'],
+  '/favicon.ico': ['favicon-32.png', 'image/png'],
+  '/apple-touch-icon.png': ['apple-touch-icon.png', 'image/png'],
+};
 const send = (res, code, obj) => {
   res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' });
   res.end(JSON.stringify(obj));
@@ -159,12 +214,21 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
       if (req.method === 'POST' && p === '/api/quests') {
-        const { name, releaseDate } = await json(req);
+        const { name, releaseDate, wikiUrl } = await json(req);
         if (!norm(name)) return send(res, 400, { error: 'Enter a quest name.' });
-        const date = /^\d{4}-\d{2}-\d{2}$/.test(releaseDate || '') ? releaseDate : '';
-        try { db.prepare('INSERT INTO quests (name, name_norm, release_date, created_at) VALUES (?, ?, ?, ?)').run(String(name).trim(), norm(name), date, nowIso()); }
+        const wiki = cleanWiki(wikiUrl);
+        try { db.prepare('INSERT INTO quests (name, name_norm, release_date, wiki_url, created_at) VALUES (?, ?, ?, ?, ?)').run(String(name).trim(), norm(name), isDate(releaseDate) ? releaseDate : '', wiki, nowIso()); }
         catch (e) { if (isUnique(e)) return send(res, 409, { error: `${name} is already in the cup.` }); throw e; }
         return send(res, 201, { ok: true });
+      }
+      if (req.method === 'PATCH' && /^\/api\/quests\/\d+$/.test(p)) {
+        // Edit a quest's release date and wiki link. An empty wikiUrl restores the default link.
+        const body = await json(req);
+        const q = db.prepare('SELECT id FROM quests WHERE id = ?').get(id);
+        if (!q) return send(res, 404, { error: 'That quest no longer exists.' });
+        if ('releaseDate' in body) db.prepare('UPDATE quests SET release_date = ? WHERE id = ?').run(isDate(body.releaseDate) ? body.releaseDate : '', id);
+        if ('wikiUrl' in body) db.prepare('UPDATE quests SET wiki_url = ? WHERE id = ?').run(cleanWiki(body.wikiUrl), id);
+        return send(res, 200, { ok: true });
       }
       if (req.method === 'DELETE' && /^\/api\/quests\/\d+$/.test(p)) {
         db.prepare('DELETE FROM quests WHERE id = ?').run(id); // events are kept; re-adding the quest restores its finishes
@@ -186,13 +250,19 @@ const server = http.createServer(async (req, res) => {
       return send(res, 404, { error: 'not found' });
     }
 
+    const icon = ICONS[p];
+    if (req.method === 'GET' && icon) {
+      res.writeHead(200, { 'content-type': icon[1], 'cache-control': 'public, max-age=604800' });
+      return fs.createReadStream(path.join(PUBLIC, icon[0])).pipe(res);
+    }
     if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
       return fs.createReadStream(path.join(PUBLIC, 'index.html')).pipe(res);
     }
     send(res, 404, { error: 'not found' });
   } catch (e) {
-    console.error(`${req.method} ${p.startsWith('/hook/') ? '/hook/***' : p}: ${e.message}`);
+    if (!(e instanceof UserError)) console.error(`${req.method} ${p.startsWith('/hook/') ? '/hook/***' : p}: ${e.message}`);
+    if (e instanceof UserError) return send(res, 400, { error: e.message });
     send(res, e instanceof SyntaxError ? 400 : 500, { error: e instanceof SyntaxError ? 'Malformed request body.' : 'Server error.' });
   }
 });
