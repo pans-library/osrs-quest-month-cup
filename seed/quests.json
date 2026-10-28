@@ -1,0 +1,9 @@
+{
+  "_comment": "Quests preloaded on launch. Each is added once; a seeded quest the organiser removes stays removed. wikiUrl is optional (defaults to the wiki page named after the quest); releaseDate is optional (YYYY-MM-DD).",
+  "quests": [
+    {
+      "name": "The Graveyard",
+      "wikiUrl": "https://oldschool.runescape.wiki/w/The_Graveyard"
+    }
+  ]
+}

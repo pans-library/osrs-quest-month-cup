@@ -2,6 +2,13 @@
 
 A self-hosted scoreboard for a friendly race through Old School RuneScape's Quest Month (November 2026). Each player runs the [Dink](https://github.com/pajlads/DinkPlugin) RuneLite plugin. The moment the quest complete scroll appears, Dink posts the completion to this server, and the scoreboard updates for everyone. Nobody types anything in, and the order of finishes comes from when the server received each one.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img alt="Scoreboard with five players ranked by points, and three quest cards listing each player's finish position, time and points." src="docs/screenshot-light.png">
+</picture>
+
+<sub>Example data. The real surprise quests are named on release day.</sub>
+
 - One small Docker container: Node 26 LTS, no dependencies, SQLite on a volume.
 - Published to the internet through a Cloudflare Tunnel, so no ports are opened on your router.
 - Viewing is public and read-only. Only the organiser, who has a key, can add players and quests.
@@ -83,10 +90,25 @@ services:
       CUP_START: "2026-11-01T00:00:00Z"
     volumes:
       - cup-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 384M
+          pids: 100
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
   cloudflared:
     image: cloudflare/cloudflared:2026.10.4
     restart: unless-stopped
     command: tunnel --no-autoupdate run
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
     environment:
       TUNNEL_TOKEN: "<your tunnel token>"
     depends_on:
@@ -98,13 +120,16 @@ volumes:
 
 If you already run the TrueNAS **cloudflared** app, leave out the `cloudflared` service. Instead, publish a port on `cup`, for example `ports: ["30080:8080"]`, and point the tunnel's public hostname at `http://<nas-lan-ip>:30080`. Any free host port works; TrueNAS apps conventionally use 30000 and up.
 
+The `deploy.resources.limits` block keeps the cup from taking more than one CPU core and 384 MB of memory. It idles at about 50 MB. The server also limits how much upload data it holds at once (`MAX_INFLIGHT_MB`), refusing extra uploads with "busy" rather than growing past the limit. The other settings run it with a read-only filesystem and no extra privileges.
+
 Deleting the app can also delete its volume, and the cup's history with it. Back up the database first if you want to keep it (see Operating notes).
 
 ### 4. Check it
 
 - `https://cup.example.com/` shows the scoreboard.
 - `https://cup.example.com/healthz` returns `{"ok":true}`.
-- Click **Organiser** at the bottom of the page, enter your `ADMIN_TOKEN`, and add players (by RSN) and the first quest.
+- Click **Organiser** at the bottom of the page, enter your `ADMIN_TOKEN`, and add players by RSN. Quests from the seed file (see below) are already there.
+- The organiser tools include a ready-to-paste **message for your friends** and, separately, the exact **Dink webhook link** with a copy button. Post the message in your group chat; send the link to each player privately.
 
 To check the webhook before any quest releases, send a fake completion and confirm it appears in the organiser's "Quests seen" list. Set `CUP_START` to a past date while you test:
 
@@ -113,6 +138,27 @@ curl -X POST https://cup.example.com/hook/<WEBHOOK_TOKEN> \
   -H 'content-type: application/json' \
   -d '{"type":"QUEST","playerName":"Your RSN","extra":{"questName":"Test Quest"}}'
 ```
+
+## Preloaded quests
+
+`seed/quests.json` lists quests to load on launch, so a fresh install starts with the cup's quests already on the board:
+
+```json
+{
+  "quests": [
+    { "name": "The Graveyard", "wikiUrl": "https://oldschool.runescape.wiki/w/The_Graveyard" },
+    { "name": "Another Quest", "releaseDate": "2026-11-12" }
+  ]
+}
+```
+
+- `name` must match the in-game quest name, since that's what Dink reports.
+- `wikiUrl` and `releaseDate` (`YYYY-MM-DD`) are optional. Without `wikiUrl`, the quest links to the wiki page named after it.
+- Each quest is added once. If the organiser removes a seeded quest, it stays removed after restarts. Quests added to the file in a later image appear on the next restart.
+
+The image ships with this repository's seed file. To use your own, mount a file and point `SEED_FILE` at it, for example `-v ./my-quests.json:/seed.json:ro -e SEED_FILE=/seed.json`.
+
+The organiser can also change any quest's release date and wiki link from its card. Wiki links must point to `https://oldschool.runescape.wiki/`.
 
 ## Player setup (Dink)
 
@@ -131,7 +177,10 @@ Your RSN on the cup roster must match your in-game name. Capitals, spaces and un
 
 ## Operating notes
 
-- **Keep the webhook URL private.** Anyone who has it can post fake completions. Only RSNs on the roster count, but if the URL leaks, change `WEBHOOK_TOKEN` and send the new URL to your players.
+- **Keep the webhook URL private.** Anyone who has it can post fake completions. Only RSNs on the roster count, but if the URL leaks, change `WEBHOOK_TOKEN` and send the new URL to your players. Send it by direct message, not in a public Discord channel.
+- **Keep the organiser key private.** If it leaks, change `ADMIN_TOKEN` and restart the container; the old key stops working immediately. The page remembers the key in the browser until you click **Lock organiser tools**, so lock it on shared computers.
+- **What's public.** Anyone with the scoreboard address can see the roster RSNs and finish times, including through `/api/state`. The webhook link and organiser key are never shown to visitors.
+- **Updating.** New images include security fixes. With Docker Compose, run `docker compose pull && docker compose up -d`. On TrueNAS, use the app's **Update** button, or redeploy to pull the latest image.
 - **If the server goes down**, completions sent during that time are lost. Dink doesn't resend them. Keep Discord as a second webhook so there's a record, and use **Log a finish by hand** in the organiser tools to backfill each one with its time.
 - **Backups**: the whole database is `cup.sqlite` in `/data`. Stop the container first so everything has been written to that file, then copy it out:
   - Docker Compose with the bind mount: copy `data/cup.sqlite`.
@@ -142,6 +191,10 @@ Your RSN on the cup roster must match your in-game name. Capitals, spaces and un
 
 Dependabot checks weekly for new versions of the Node base image, the pinned `cloudflared` image and the GitHub Actions used to build. If you run from the TrueNAS YAML above, bump the `cloudflared` tag there when the repository's tag changes. Cloudflare supports each `cloudflared` release for about a year.
 
+## Security
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability privately.
+
 ## Configuration
 
 | Variable        | Required | Default                 | Purpose |
@@ -151,6 +204,9 @@ Dependabot checks weekly for new versions of the Node base image, the pinned `cl
 | `CUP_START`     | no       | `2026-11-01T00:00:00Z`  | Ignore completions before this time |
 | `PORT`          | no       | `8080`                  | Listen port inside the container |
 | `DATA_DIR`      | no       | `/data`                 | Where `cup.sqlite` lives |
+| `SEED_FILE`     | no       | `seed/quests.json` in the image | Quests to preload, see Preloaded quests |
+| `MAX_INFLIGHT_MB` | no     | `48`                    | Upload data held in memory at once; extra uploads get "busy" (HTTP 503) |
+| `MAX_EVENTS`    | no       | `20000`                 | Stop storing webhook posts after this many, to protect the disk if the webhook link leaks |
 | `TUNNEL_TOKEN`  | compose  |                         | Cloudflare Tunnel token for the bundled cloudflared |
 
 ## Local development
@@ -164,3 +220,5 @@ Use Node 26 to match the container. `.node-version` pins it for fnm, mise, noden
 ---
 
 Not affiliated with Jagex, RuneLite or the Dink project. Old School RuneScape is a trademark of Jagex Ltd.
+
+The trophy icon is [Trophy cup](https://game-icons.net/1x1/delapouite/trophy-cup.html) by Delapouite from [game-icons.net](https://game-icons.net), used under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and recoloured.

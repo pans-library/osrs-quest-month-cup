@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quest Month Cup</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Alegreya+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -62,7 +65,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(34px, 7vw
 h2 { font-family: var(--f-display); font-weight: 500; font-size: 22px; margin: 0; color: var(--gold); }
 .banner { border: 1px dashed var(--line); padding: 10px 14px; color: var(--muted); font-size: 15px; }
 
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 18px; display: grid; gap: 14px; min-width: 0; align-content: start; }
 .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 
 /* standings */
@@ -89,6 +92,16 @@ tr.lead .rank, tr.lead .pts { color: var(--gold); }
 .quest { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
 .quest-top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
 .qname { font-family: var(--f-display); font-size: 20px; line-height: 1.15; margin: 0; overflow-wrap: anywhere; }
+.qname a { color: inherit; text-decoration: none; }
+.qname a:hover, .qname a:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+.qname .ext { font-size: .6em; margin-left: 4px; color: var(--muted); }
+.qedit { display: flex; flex-wrap: wrap; gap: 8px; }
+.qedit input[type=url] { flex: 1 1 100%; }
+.share textarea, .share input[readonly] { width: 100%; box-sizing: border-box; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 3px; padding: 9px; font-family: var(--f-data); font-size: 13px; line-height: 1.5; }
+.share textarea { min-height: 15em; resize: vertical; }
+.copy-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.copy-row input { flex: 1 1 260px; min-width: 0; }
+.warn { color: var(--q-new); font-size: 14px; margin: 0; }
 .qname.s-new { color: var(--q-new); } .qname.s-prog { color: var(--q-prog); } .qname.s-done { color: var(--q-done); }
 .qmeta { font-family: var(--f-data); font-size: 12px; color: var(--muted); }
 ol.finishes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -163,6 +176,24 @@ footer button { font-size: 13px; padding: 4px 10px; }
   </section>
 
   <section class="org" id="org" hidden>
+    <div class="manage share">
+      <div class="panel">
+        <h2>Message for your friends</h2>
+        <p class="empty-note">Paste this into your group chat. It doesn't contain the webhook link, so it's safe to post where others can see it.</p>
+        <textarea id="share-message" readonly aria-label="Message for friends"></textarea>
+        <div class="copy-row"><button class="primary" type="button" id="copy-message">Copy message</button><span class="qmeta" id="copy-message-done"></span></div>
+      </div>
+      <div class="panel">
+        <h2>Dink webhook link</h2>
+        <p class="empty-note">Each player adds this as a new line under Dink's <b>Primary Webhook URLs</b>.</p>
+        <div class="copy-row">
+          <input id="hook-url" readonly aria-label="Dink webhook link">
+          <button class="primary" type="button" id="copy-hook">Copy link</button>
+        </div>
+        <span class="qmeta" id="copy-hook-done"></span>
+        <p class="warn">Send it privately, in a direct message. Anyone who has this link can post quest completions.</p>
+      </div>
+    </div>
     <div class="manage">
       <div class="panel">
         <h2>Players</h2>
@@ -180,6 +211,7 @@ footer button { font-size: 13px; padding: 4px 10px; }
         <form id="add-quest">
           <input id="quest-name" placeholder="Quest name" maxlength="80" required aria-label="Quest name">
           <input id="quest-date" type="date" aria-label="Release date">
+          <input id="quest-wiki" type="url" placeholder="Wiki link (optional, defaults to the quest's wiki page)" aria-label="Wiki link" style="flex:1 1 100%">
           <button class="primary" type="submit">Add quest</button>
         </form>
         <p class="err" id="quest-err"></p>
@@ -342,7 +374,8 @@ function questCard(q, list, admin) {
   const names = new Map(state.players.map(p => [p.id, p.rsn]));
   return el('article', { class: 'quest' },
     el('div', { class: 'quest-top' },
-      el('div', {}, el('h3', { class: `qname ${status}` }, q.name),
+      el('div', {}, el('h3', { class: `qname ${status}` },
+          el('a', { href: q.wikiUrl, target: '_blank', rel: 'noopener noreferrer', title: `${q.name} on the OSRS Wiki` }, q.name, el('span', { class: 'ext', 'aria-hidden': 'true' }, '↗'))),
         el('div', { class: 'qmeta' }, `Released ${fmtDate(q.releaseDate)} · ${list.length} of ${state.players.length} finished`)),
       admin ? armButton('×', `Remove quest ${q.name}`, () => act('DELETE', `/api/quests/${q.id}`, null, 'quest-err')) : null),
     list.length
@@ -353,10 +386,50 @@ function questCard(q, list, admin) {
             el('small', {}, fmtTime(f.finishedAt))),
           el('span', { class: 'fpts' }, `+${f.points}`),
           admin ? armButton('×', 'Delete this finish', () => act('DELETE', `/api/events/${f.id}`, null, 'event-err')) : el('span'))))
-      : el('p', { class: 'empty-note' }, 'Nobody has finished yet. First place is worth 10.'));
+      : el('p', { class: 'empty-note' }, 'Nobody has finished yet. First place is worth 10.'),
+    admin ? questEditor(q) : null);
+}
+
+// Organiser-only editor for a quest's release date and wiki link. Drafts survive the
+// once-a-minute refresh so typing isn't lost.
+const drafts = new Map();
+function questEditor(q) {
+  const open = drafts.has(q.id);
+  if (!open) return el('div', {}, el('button', { type: 'button', class: 'x', onclick: () => { drafts.set(q.id, { releaseDate: q.releaseDate, wikiUrl: q.wikiCustom ? q.wikiUrl : '' }); render(); } }, 'Edit date or wiki link'));
+  const d = drafts.get(q.id);
+  const date = el('input', { type: 'date', value: d.releaseDate || '', id: `edit-date-${q.id}`, 'aria-label': 'Release date', oninput: (e) => { d.releaseDate = e.target.value; } });
+  const wiki = el('input', { type: 'url', value: d.wikiUrl || '', id: `edit-wiki-${q.id}`, placeholder: 'Default: the quest\'s wiki page', 'aria-label': 'Wiki link', oninput: (e) => { d.wikiUrl = e.target.value; } });
+  const err = el('p', { class: 'err', id: `edit-err-${q.id}` });
+  return el('form', { class: 'qedit', onsubmit: async (e) => {
+      e.preventDefault();
+      try { await api('PATCH', `/api/quests/${q.id}`, { releaseDate: d.releaseDate || '', wikiUrl: (d.wikiUrl || '').trim() }); drafts.delete(q.id); await load(); }
+      catch (x) { err.textContent = x.message; }
+    } },
+    date, wiki,
+    el('button', { class: 'primary', type: 'submit' }, 'Save'),
+    el('button', { type: 'button', onclick: () => { drafts.delete(q.id); render(); } }, 'Cancel'),
+    err);
+}
+
+function shareMessage() {
+  const qs = state.quests.map(q => `- ${q.name}`).join('\n');
+  return [
+    `Quest Month Cup scoreboard: ${location.origin}/`,
+    '',
+    'To get your quest finishes on the board:',
+    '1. In RuneLite, open the Plugin Hub and install Dink.',
+    '2. In Dink\'s settings, add the webhook link I send you separately as a new line under "Primary Webhook URLs". Keep your Discord link if you already have one.',
+    '3. Under "Quest", turn on "Enable Quests".',
+    '4. Tell me your RSN so I can add you to the roster.',
+    '',
+    'Each quest is scored on its own: 1st 10, 2nd 6, 3rd 4, 4th 3, 5th 2, everyone after 1.',
+    ...(qs ? ['', 'Quests so far:', qs] : []),
+  ].join('\n');
 }
 
 function renderOrganiser() {
+  const msg = $('share-message'); if (document.activeElement !== msg) msg.value = shareMessage();
+  $('hook-url').value = state.hookPath ? location.origin + state.hookPath : '';
   $('roster').replaceChildren(...(state.players.length
     ? state.players.map(p => el('span', {}, p.rsn, armButton('×', `Remove ${p.rsn}`, () => act('DELETE', `/api/players/${p.id}`, null, 'player-err'))))
     : [el('span', { class: 'empty-note', style: 'border:0;background:none;padding:0' }, 'Nobody on the roster yet.')]));
@@ -402,13 +475,22 @@ $('add-player').addEventListener('submit', async (e) => {
 });
 $('add-quest').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (await act('POST', '/api/quests', { name: $('quest-name').value, releaseDate: $('quest-date').value }, 'quest-err')) { $('quest-name').value = ''; $('quest-date').value = ''; }
+  if (await act('POST', '/api/quests', { name: $('quest-name').value, releaseDate: $('quest-date').value, wikiUrl: $('quest-wiki').value.trim() }, 'quest-err')) { $('quest-name').value = ''; $('quest-date').value = ''; $('quest-wiki').value = ''; }
 });
 $('add-event').addEventListener('submit', async (e) => {
   e.preventDefault();
   const when = $('ev-when').value;
   await act('POST', '/api/events', { rsn: $('ev-player').value, questName: $('ev-quest').value, at: when ? new Date(when).toISOString() : undefined }, 'event-err');
 });
+// Clipboard writes can be refused (older browsers, insecure origins); fall back to selecting the text.
+async function copyFrom(field, doneId) {
+  try { await navigator.clipboard.writeText(field.value); $(doneId).textContent = 'Copied.'; }
+  catch { field.focus(); field.select(); $(doneId).textContent = 'Press Ctrl+C or Cmd+C to copy.'; }
+  setTimeout(() => { $(doneId).textContent = ''; }, 4000);
+}
+$('copy-message').addEventListener('click', () => copyFrom($('share-message'), 'copy-message-done'));
+$('copy-hook').addEventListener('click', () => copyFrom($('hook-url'), 'copy-hook-done'));
+
 $('org-toggle').addEventListener('click', () => {
   if (state.admin) { forgetKey(); state.admin = false; load(); return; }
   const f = $('key-form'); f.hidden = !f.hidden; if (!f.hidden) $('key-input').focus();
