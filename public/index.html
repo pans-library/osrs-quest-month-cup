@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quest Month Cup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Alegreya+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+body { margin: 0; }
+[hidden] { display: none !important; }
+
+/* Layout: quest-journal panel. Standings first, then one card per quest with its finish order. Dark-first stone UI. */
+:root {
+  --bg: #1d1914;          /* dark stone */
+  --panel: #2b251d;
+  --panel-2: #352d23;
+  --line: #4d4233;
+  --fg: #e9dfc9;
+  --muted: #a8997d;
+  --gold: #f0c64a;        /* interface yellow */
+  --q-done: #3fd56b;      /* quest list: complete */
+  --q-prog: #f2e14b;      /* quest list: in progress */
+  --q-new: #ff5a4a;       /* quest list: not started */
+  --silver: #c9ccd3;
+  --bronze: #d08c4f;
+  --f-display: "Pixelify Sans", "Courier New", monospace;
+  --f-body: "Alegreya Sans", "Trebuchet MS", system-ui, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #ece3cf; --panel: #f7f0df; --panel-2: #efe5cd; --line: #cdbd98;
+    --fg: #2a2117; --muted: #6e5f45; --gold: #9a6a00;
+    --q-done: #17803a; --q-prog: #8a7400; --q-new: #b42318;
+    --silver: #5f6670; --bronze: #96541d; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #ece3cf; --panel: #f7f0df; --panel-2: #efe5cd; --line: #cdbd98;
+  --fg: #2a2117; --muted: #6e5f45; --gold: #9a6a00;
+  --q-done: #17803a; --q-prog: #8a7400; --q-new: #b42318;
+  --silver: #5f6670; --bronze: #96541d; color-scheme: light;
+}
+
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--f-body); font-size: 17px; line-height: 1.45;
+}
+.wrap {
+  max-width: 980px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+  display: grid; gap: 28px;
+}
+header { display: grid; gap: 6px; }
+.eyebrow { font-family: var(--f-data); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(34px, 7vw, 54px); line-height: 1; margin: 0; color: var(--gold); text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 60ch; }
+h2 { font-family: var(--f-display); font-weight: 500; font-size: 22px; margin: 0; color: var(--gold); }
+.banner { border: 1px dashed var(--line); padding: 10px 14px; color: var(--muted); font-size: 15px; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+
+/* standings */
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-family: var(--f-data); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 9px 8px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; }
+.rank { font-family: var(--f-display); font-size: 20px; width: 2.2em; color: var(--muted); }
+tr.lead .rank, tr.lead .pts { color: var(--gold); }
+.pts { font-family: var(--f-display); font-size: 22px; }
+.pname { font-weight: 700; }
+.medals { display: inline-flex; gap: 10px; font-family: var(--f-data); font-size: 14px; }
+.m { display: inline-flex; align-items: center; gap: 4px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.d1 { background: var(--gold); } .d2 { background: var(--silver); } .d3 { background: var(--bronze); }
+
+.scoring { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--f-data); font-size: 13px; color: var(--muted); align-items: center; }
+.chip { border: 1px solid var(--line); padding: 2px 8px; border-radius: 3px; background: var(--panel-2); color: var(--fg); }
+
+/* quests */
+.quests { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; align-items: start; }
+.quest { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.quest-top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+.qname { font-family: var(--f-display); font-size: 20px; line-height: 1.15; margin: 0; overflow-wrap: anywhere; }
+.qname.s-new { color: var(--q-new); } .qname.s-prog { color: var(--q-prog); } .qname.s-done { color: var(--q-done); }
+.qmeta { font-family: var(--f-data); font-size: 12px; color: var(--muted); }
+ol.finishes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+ol.finishes li { display: grid; grid-template-columns: 2.4em 1fr auto auto; gap: 8px; align-items: center; background: var(--panel-2); padding: 6px 8px; border-radius: 3px; }
+.place { font-family: var(--f-display); font-size: 17px; color: var(--muted); }
+.place.p1 { color: var(--gold); } .place.p2 { color: var(--silver); } .place.p3 { color: var(--bronze); }
+.fname { min-width: 0; overflow-wrap: anywhere; }
+.fname small { display: block; font-family: var(--f-data); font-size: 11px; color: var(--muted); }
+.fpts { font-family: var(--f-data); font-size: 14px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.empty-note { color: var(--muted); font-size: 15px; margin: 0; }
+
+form.log { display: flex; flex-wrap: wrap; gap: 8px; }
+form.log select { flex: 1 1 120px; }
+form.log input { flex: 1 1 170px; }
+
+/* controls */
+input, select, button { font: inherit; font-size: 15px; }
+input, select { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 3px; padding: 7px 9px; min-width: 0; }
+button { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 3px; padding: 7px 12px; cursor: pointer; }
+button.primary { background: var(--gold); color: #1d1914; border-color: var(--gold); font-weight: 700; }
+button:hover { border-color: var(--gold); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.x { padding: 2px 7px; font-size: 13px; color: var(--muted); background: transparent; }
+button.x.arm { color: var(--q-new); border-color: var(--q-new); }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.manage { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.manage form { display: flex; flex-wrap: wrap; gap: 8px; }
+.manage form input { flex: 1 1 140px; }
+.roster { display: flex; flex-wrap: wrap; gap: 6px; }
+.roster span { display: inline-flex; align-items: center; gap: 4px; background: var(--panel-2); border: 1px solid var(--line); padding: 3px 4px 3px 10px; border-radius: 3px; }
+.err { color: var(--q-new); font-size: 14px; min-height: 1em; margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.org { display: grid; gap: 16px; }
+.org-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.org-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--panel-2); padding: 6px 8px; border-radius: 3px; flex-wrap: wrap; }
+.src { font-family: var(--f-data); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 2px; padding: 0 4px; margin-left: 6px; }
+footer { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 14px; }
+footer button { font-size: 13px; padding: 4px 10px; }
+#key-form { display: flex; gap: 8px; flex-wrap: wrap; }
+#key-form input { flex: 1 1 200px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Old School RuneScape · Quest Month</div>
+    <h1>Quest Month Cup</h1>
+    <p class="lede">Finishes are logged automatically by the Dink RuneLite plugin the moment the quest complete scroll appears. First to finish takes the big points, everyone after still scores.</p>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section class="panel" aria-labelledby="st-h">
+    <div class="panel-head">
+      <h2 id="st-h">Standings</h2>
+      <div class="scoring" id="scoring"></div>
+    </div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>#</th><th>Player</th><th>Podiums</th><th class="num">Quests</th><th class="num">Points</th></tr></thead>
+      <tbody id="standings"></tbody>
+    </table></div>
+  </section>
+
+  <section aria-labelledby="q-h" style="display:grid;gap:14px">
+    <div class="panel-head">
+      <h2 id="q-h">Quests</h2>
+      <span class="qmeta"><span style="color:var(--q-new)">&#9632;</span> no one yet · <span style="color:var(--q-prog)">&#9632;</span> in progress · <span style="color:var(--q-done)">&#9632;</span> everyone done</span>
+    </div>
+    <div class="quests" id="quests"></div>
+  </section>
+
+  <section class="org" id="org" hidden>
+    <div class="manage">
+      <div class="panel">
+        <h2>Players</h2>
+        <p class="empty-note">Use each player's RSN exactly as Dink reports it. Capitals and spaces don't matter.</p>
+        <div class="roster" id="roster"></div>
+        <form id="add-player">
+          <input id="player-name" placeholder="RSN" maxlength="12" required aria-label="RSN">
+          <button class="primary" type="submit">Add player</button>
+        </form>
+        <p class="err" id="player-err"></p>
+      </div>
+      <div class="panel">
+        <h2>Add a quest</h2>
+        <p class="empty-note">The name must match the in-game quest name. Finishes Dink already sent for it appear right away.</p>
+        <form id="add-quest">
+          <input id="quest-name" placeholder="Quest name" maxlength="80" required aria-label="Quest name">
+          <input id="quest-date" type="date" aria-label="Release date">
+          <button class="primary" type="submit">Add quest</button>
+        </form>
+        <p class="err" id="quest-err"></p>
+      </div>
+    </div>
+    <div class="manage">
+      <div class="panel">
+        <h2>Quests seen, not in the cup</h2>
+        <p class="empty-note">Completions Dink has sent since the cup started for quests not on the list. Add the new releases.</p>
+        <ul class="org-list" id="unmatched"></ul>
+        <h2>Unknown players</h2>
+        <p class="empty-note">RSNs that sent completions but aren't on the roster.</p>
+        <ul class="org-list" id="unknown"></ul>
+      </div>
+      <div class="panel">
+        <h2>Log a finish by hand</h2>
+        <p class="empty-note">For when the server was offline. Use the time from the player's Discord post or chatbox.</p>
+        <form id="add-event" class="log">
+          <select id="ev-player" aria-label="Player"></select>
+          <select id="ev-quest" aria-label="Quest"></select>
+          <input id="ev-when" type="datetime-local" aria-label="Finish time">
+          <button class="primary" type="submit">Log finish</button>
+        </form>
+        <p class="err" id="event-err"></p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span id="updated">Loading standings…</span>
+    <span>
+      <button type="button" id="org-toggle">Organiser</button>
+    </span>
+  </footer>
+  <form id="key-form" hidden>
+    <input id="key-input" type="password" placeholder="Organiser key" autocomplete="current-password" aria-label="Organiser key" required>
+    <button class="primary" type="submit">Unlock</button>
+  </form>
+</div>
+<script>
+const POINTS = [10, 6, 4, 3, 2]; // 6th place onward scores 1
+const pointsFor = (place) => POINTS[place - 1] ?? 1;
+const REFRESH_MS = 60000;
+
+let state = { players: [], quests: [], finishes: [], admin: false };
+let key = '';
+try { key = localStorage.getItem('cup-organiser-key') || ''; } catch {}
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') n.className = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k);
+  return n;
+};
+const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+const fmtTime = (iso) => new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Date TBA';
+const nowLocal = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+const byName = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' });
+
+/* ---------- api ---------- */
+async function api(method, path, body) {
+  const headers = { 'content-type': 'application/json' };
+  if (key) headers.authorization = 'Bearer ' + key;
+  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status}).`);
+  return data;
+}
+async function load() {
+  try {
+    state = await api('GET', '/api/state');
+    if (key && !state.admin) { forgetKey(); showBanner('That organiser key was not accepted.'); }
+    else hideBanner();
+    $('updated').textContent = 'Updated ' + new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  } catch {
+    showBanner('Could not reach the server. Showing the last standings loaded. Retrying every minute.');
+  }
+  render();
+}
+const showBanner = (t) => { const b = $('banner'); b.textContent = t; b.hidden = false; };
+const hideBanner = () => { $('banner').hidden = true; };
+function forgetKey() { key = ''; try { localStorage.removeItem('cup-organiser-key'); } catch {} }
+
+/* ---------- derived ---------- */
+function placings() {
+  const byQuest = new Map();
+  for (const f of state.finishes) {
+    if (!byQuest.has(f.questId)) byQuest.set(f.questId, []);
+    byQuest.get(f.questId).push({ ...f });
+  }
+  for (const list of byQuest.values()) {
+    list.sort((a, b) => a.finishedAt.localeCompare(b.finishedAt) || a.id - b.id);
+    list.forEach((f, i) => { f.place = i + 1; f.points = pointsFor(i + 1); });
+  }
+  return byQuest;
+}
+function standings(byQuest) {
+  const rows = state.players.map(p => ({ ...p, pts: 0, quests: 0, places: [] }));
+  const idx = new Map(rows.map(r => [r.id, r]));
+  for (const list of byQuest.values()) for (const f of list) {
+    const r = idx.get(f.playerId); if (!r) continue;
+    r.pts += f.points; r.quests++; r.places.push(f.place);
+  }
+  const count = (r, n) => r.places.filter(p => p === n).length;
+  rows.sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    for (let n = 1; n <= 10; n++) { const d = count(b, n) - count(a, n); if (d) return d; }
+    return byName(a.rsn, b.rsn);
+  });
+  rows.forEach(r => { r.g = count(r, 1); r.s = count(r, 2); r.b = count(r, 3); });
+  return rows;
+}
+
+/* ---------- render ---------- */
+function render() {
+  const admin = state.admin;
+  const byQuest = placings();
+  const rows = standings(byQuest);
+
+  $('scoring').replaceChildren('Scoring', ...POINTS.map((p, i) => el('span', { class: 'chip' }, `${ordinal(i + 1)} ${p}`)), el('span', { class: 'chip' }, '6th+ 1'));
+
+  const tb = $('standings');
+  if (!rows.length) {
+    tb.replaceChildren(el('tr', {}, el('td', { colspan: 5, class: 'empty-note' }, 'No players yet. The organiser adds everyone by RSN.')));
+  } else {
+    let prevKey = null, prevRank = 0;
+    tb.replaceChildren(...rows.map((r, i) => {
+      const k = [r.pts, r.g, r.s, r.b].join('|');
+      const rank = k === prevKey ? prevRank : i + 1; prevKey = k; prevRank = rank;
+      return el('tr', { class: rank === 1 && r.pts > 0 ? 'lead' : '' },
+        el('td', { class: 'rank' }, String(rank)),
+        el('td', { class: 'pname' }, r.rsn),
+        el('td', {}, el('span', { class: 'medals' },
+          el('span', { class: 'm', title: 'First place' }, el('i', { class: 'dot d1' }), String(r.g)),
+          el('span', { class: 'm', title: 'Second place' }, el('i', { class: 'dot d2' }), String(r.s)),
+          el('span', { class: 'm', title: 'Third place' }, el('i', { class: 'dot d3' }), String(r.b)))),
+        el('td', { class: 'num' }, `${r.quests}/${state.quests.length}`),
+        el('td', { class: 'num pts' }, String(r.pts)));
+    }));
+  }
+
+  const qs = [...state.quests].sort((a, b) => (a.releaseDate || '9999').localeCompare(b.releaseDate || '9999') || a.createdAt.localeCompare(b.createdAt));
+  $('quests').replaceChildren(...(qs.length ? qs.map(q => questCard(q, byQuest.get(q.id) || [], admin))
+    : [el('p', { class: 'empty-note' }, 'No quests yet. New releases are added as they come out.')]));
+
+  $('org').hidden = !admin;
+  $('org-toggle').textContent = admin ? 'Lock organiser tools' : 'Organiser';
+  if (admin) renderOrganiser();
+}
+
+function questCard(q, list, admin) {
+  const done = new Set(list.map(f => f.playerId));
+  const status = !list.length ? 's-new' : (state.players.length && done.size >= state.players.length ? 's-done' : 's-prog');
+  const names = new Map(state.players.map(p => [p.id, p.rsn]));
+  return el('article', { class: 'quest' },
+    el('div', { class: 'quest-top' },
+      el('div', {}, el('h3', { class: `qname ${status}` }, q.name),
+        el('div', { class: 'qmeta' }, `Released ${fmtDate(q.releaseDate)} · ${list.length} of ${state.players.length} finished`)),
+      admin ? armButton('×', `Remove quest ${q.name}`, () => act('DELETE', `/api/quests/${q.id}`, null, 'quest-err')) : null),
+    list.length
+      ? el('ol', { class: 'finishes' }, ...list.map(f => el('li', {},
+          el('span', { class: `place p${f.place}` }, ordinal(f.place)),
+          el('span', { class: 'fname' }, names.get(f.playerId) || 'Removed',
+            f.source === 'manual' ? el('span', { class: 'src', title: 'Logged by hand' }, 'manual') : null,
+            el('small', {}, fmtTime(f.finishedAt))),
+          el('span', { class: 'fpts' }, `+${f.points}`),
+          admin ? armButton('×', 'Delete this finish', () => act('DELETE', `/api/events/${f.id}`, null, 'event-err')) : el('span'))))
+      : el('p', { class: 'empty-note' }, 'Nobody has finished yet. First place is worth 10.'));
+}
+
+function renderOrganiser() {
+  $('roster').replaceChildren(...(state.players.length
+    ? state.players.map(p => el('span', {}, p.rsn, armButton('×', `Remove ${p.rsn}`, () => act('DELETE', `/api/players/${p.id}`, null, 'player-err'))))
+    : [el('span', { class: 'empty-note', style: 'border:0;background:none;padding:0' }, 'Nobody on the roster yet.')]));
+
+  const um = state.unmatchedQuests || [];
+  $('unmatched').replaceChildren(...(um.length ? um.map(u => el('li', {},
+    el('span', {}, u.name, el('span', { class: 'qmeta' }, ` · ${u.n} completion${u.n === 1 ? '' : 's'}, first ${fmtTime(u.firstAt)}`)),
+    el('button', { type: 'button', onclick: () => act('POST', '/api/quests', { name: u.name, releaseDate: u.firstAt.slice(0, 10) }, 'quest-err') }, 'Add to cup')))
+    : [el('li', { class: 'empty-note' }, 'Nothing new.')]));
+
+  const uk = state.unknownPlayers || [];
+  $('unknown').replaceChildren(...(uk.length ? uk.map(u => el('li', {},
+    el('span', {}, u.rsn, el('span', { class: 'qmeta' }, ` · ${u.n} completion${u.n === 1 ? '' : 's'}`)),
+    el('button', { type: 'button', onclick: () => act('POST', '/api/players', { rsn: u.rsn }, 'player-err') }, 'Add to roster')))
+    : [el('li', { class: 'empty-note' }, 'None.')]));
+
+  const keep = (sel, opts) => { const v = sel.value; sel.replaceChildren(...opts); if ([...sel.options].some(o => o.value === v)) sel.value = v; };
+  keep($('ev-player'), state.players.map(p => el('option', { value: p.rsn }, p.rsn)));
+  keep($('ev-quest'), state.quests.map(q => el('option', { value: q.name }, q.name)));
+  if (!$('ev-when').value) $('ev-when').value = nowLocal();
+}
+
+// Two-click remove: first click arms, second confirms within 3s
+function armButton(label, aria, action) {
+  let t = null;
+  const b = el('button', { class: 'x', type: 'button', 'aria-label': aria, title: aria, onclick: () => {
+    if (b.classList.contains('arm')) { clearTimeout(t); action(); return; }
+    b.classList.add('arm'); b.textContent = 'Remove?';
+    t = setTimeout(() => { b.classList.remove('arm'); b.textContent = label; }, 3000);
+  } }, label);
+  return b;
+}
+
+async function act(method, path, body, errId) {
+  try { await api(method, path, body); $(errId).textContent = ''; await load(); return true; }
+  catch (e) { $(errId).textContent = e.message; return false; }
+}
+
+/* ---------- wiring ---------- */
+$('add-player').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (await act('POST', '/api/players', { rsn: $('player-name').value }, 'player-err')) $('player-name').value = '';
+});
+$('add-quest').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (await act('POST', '/api/quests', { name: $('quest-name').value, releaseDate: $('quest-date').value }, 'quest-err')) { $('quest-name').value = ''; $('quest-date').value = ''; }
+});
+$('add-event').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const when = $('ev-when').value;
+  await act('POST', '/api/events', { rsn: $('ev-player').value, questName: $('ev-quest').value, at: when ? new Date(when).toISOString() : undefined }, 'event-err');
+});
+$('org-toggle').addEventListener('click', () => {
+  if (state.admin) { forgetKey(); state.admin = false; load(); return; }
+  const f = $('key-form'); f.hidden = !f.hidden; if (!f.hidden) $('key-input').focus();
+});
+$('key-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  key = $('key-input').value.trim(); $('key-input').value = ''; $('key-form').hidden = true;
+  try { localStorage.setItem('cup-organiser-key', key); } catch {}
+  load();
+});
+
+render();
+load();
+setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
