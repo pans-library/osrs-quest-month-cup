@@ -196,6 +196,7 @@ const ICONS = {
   '/favicon.ico': ['favicon-32.png', 'image/png'],
   '/apple-touch-icon.png': ['apple-touch-icon.png', 'image/png'],
   '/scoring.js': ['scoring.js', 'text/javascript; charset=utf-8'],
+  '/theme.js': ['theme.js', 'text/javascript; charset=utf-8'],
   // Self-hosted fonts and their licences (SIL Open Font License 1.1).
   ...Object.fromEntries([
     ['pixelify-sans.woff', 'font/woff'], ['alegreya-sans-400.woff', 'font/woff'], ['alegreya-sans-500.woff', 'font/woff'],
