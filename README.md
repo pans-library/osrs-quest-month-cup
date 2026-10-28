@@ -240,4 +240,6 @@ Use Node 26 to match the container. `.node-version` pins it for fnm, mise, noden
 
 Not affiliated with Jagex, RuneLite or the Dink project. Old School RuneScape is a trademark of Jagex Ltd.
 
+The fonts are served from the app itself, so no visitor data goes to a font service. [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans), [Alegreya Sans](https://github.com/huertatipografica/Alegreya-Sans) and [IBM Plex Mono](https://github.com/IBM/plex) are used under the [SIL Open Font License 1.1](https://openfontlicense.org); their licences are in `public/fonts/`. Pixelify Sans and Alegreya Sans are subset to the characters the pages use and converted to WOFF. IBM Plex Mono reserves the name "Plex", so it is included unmodified.
+
 The trophy icon is [Trophy cup](https://game-icons.net/1x1/delapouite/trophy-cup.html) by Delapouite from [game-icons.net](https://game-icons.net), used under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and recoloured.

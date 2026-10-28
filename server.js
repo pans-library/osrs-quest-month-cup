@@ -196,6 +196,13 @@ const ICONS = {
   '/favicon.ico': ['favicon-32.png', 'image/png'],
   '/apple-touch-icon.png': ['apple-touch-icon.png', 'image/png'],
   '/scoring.js': ['scoring.js', 'text/javascript; charset=utf-8'],
+  // Self-hosted fonts and their licences (SIL Open Font License 1.1).
+  ...Object.fromEntries([
+    ['pixelify-sans.woff', 'font/woff'], ['alegreya-sans-400.woff', 'font/woff'], ['alegreya-sans-500.woff', 'font/woff'],
+    ['alegreya-sans-700.woff', 'font/woff'], ['IBMPlexMono-Medium.ttf', 'font/ttf'],
+    ['OFL-Pixelify-Sans.txt', 'text/plain; charset=utf-8'], ['OFL-Alegreya-Sans.txt', 'text/plain; charset=utf-8'],
+    ['OFL-IBM-Plex-Mono.txt', 'text/plain; charset=utf-8'],
+  ].map(([f, type]) => [`/fonts/${f}`, [`fonts/${f}`, type]])),
 };
 const BASE_HEADERS = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY' };
 // The page is read once at start-up so its inline script can be allowed by hash rather than 'unsafe-inline'.
@@ -203,7 +210,7 @@ const cspFor = (html) => {
   const hashes = [...html.toString('utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)]
     .map(m => `'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`);
   return ["default-src 'none'", `script-src 'self' ${hashes.join(' ')}`,
-    "style-src 'unsafe-inline' https://fonts.googleapis.com", 'font-src https://fonts.gstatic.com',
+    "style-src 'unsafe-inline'", "font-src 'self'",
     "connect-src 'self'", "img-src 'self'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'"].join('; ');
 };
 const PAGES = Object.fromEntries([['/', 'index.html'], ['/index.html', 'index.html'], ['/scoring', 'scoring.html']]
