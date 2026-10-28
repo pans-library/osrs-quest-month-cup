@@ -21,7 +21,15 @@ Each quest is scored on its own, by finish order:
 |--------|-----|-----|-----|-----|-----|---------------|
 | Points | 10  | 6   | 4   | 3   | 2   | 1             |
 
-Players are ranked by total points. Ties go to whoever has more first places, then more second places, and so on. To change the curve, edit `POINTS` near the top of the script in `public/index.html`.
+Players are ranked by total points. Ties go to whoever has more first places, then more second places, and so on.
+
+The organiser can switch scoring at any time from the **Scoring lab** (`/scoring`, linked from the word "Scoring" on the board). Standings recalculate from the stored finishes, so nothing is lost by switching.
+
+- **Standard**: the table above.
+- **Custom**: your own list of points for 1st, 2nd, 3rd…, plus a value for everyone after.
+- **Dynamic**: grows with the roster. 1st is worth a set number of points per player, each place keeps a share of the place above, and there's a minimum for finishing. With the defaults, 5 players score 10 · 5 · 3 · 1 · 1 and 10 players score 20 for a win.
+
+The lab runs the same made-up seasons through every scheme side by side. It charts points by place, checks rules such as "1st plus a last beats two 2nds" and "finishing last beats not finishing", and plays out matchups like "mostly 1st vs always 2nd", "wins half, skips half vs always 3rd" and "joins late then always 1st". Set the number of players and quests to match your group. The lab is public, so players can see how scoring works; only the organiser can change it.
 
 Only quests the organiser adds to the cup count, and only finishes after `CUP_START`. Completions on seasonal worlds (Leagues, Deadman) are ignored. If Dink sends the same finish twice, only the first one counts.
 

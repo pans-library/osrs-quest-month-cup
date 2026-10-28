@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const Scoring = require('./public/scoring.js');
 
 const PORT = Number(process.env.PORT || 8080);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -40,6 +41,7 @@ db.exec(`
     source TEXT NOT NULL, seasonal INTEGER NOT NULL DEFAULT 0, payload TEXT);
   CREATE INDEX IF NOT EXISTS events_quest ON events (quest_norm, at);
   CREATE TABLE IF NOT EXISTS seed_log (name_norm TEXT PRIMARY KEY, applied_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `);
 // Migrations for databases created by earlier versions.
 if (!db.prepare('PRAGMA table_info(quests)').all().some(c => c.name === 'wiki_url')) {
@@ -65,6 +67,11 @@ function cleanWiki(url) {
   return u.href;
 }
 class UserError extends Error {}
+
+/* ---------- settings ---------- */
+const getSetting = (key) => { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? JSON.parse(r.value) : undefined; };
+const setSetting = (key, value) => db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, JSON.stringify(value));
+const scoring = () => Scoring.sanitize(getSetting('scoring'));
 
 /* ---------- seed ---------- */
 // Quests in the seed file are added once each. A seeded quest the organiser later
@@ -112,7 +119,7 @@ function state(includeAdmin) {
     }
   }
 
-  const out = { players, quests, finishes, cupStart: CUP_START, admin: !!includeAdmin };
+  const out = { players, quests, finishes, scoring: scoring(), cupStart: CUP_START, admin: !!includeAdmin };
   if (includeAdmin) {
     out.hookPath = '/hook/' + WEBHOOK_TOKEN; // shown only to the organiser, for sharing with players
     // Quest names seen from roster players that aren't on the cup list yet.
@@ -173,17 +180,19 @@ const ICONS = {
   '/favicon-32.png': ['favicon-32.png', 'image/png'],
   '/favicon.ico': ['favicon-32.png', 'image/png'],
   '/apple-touch-icon.png': ['apple-touch-icon.png', 'image/png'],
+  '/scoring.js': ['scoring.js', 'text/javascript; charset=utf-8'],
 };
 const BASE_HEADERS = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY' };
 // The page is read once at start-up so its inline script can be allowed by hash rather than 'unsafe-inline'.
-const PAGE = fs.readFileSync(path.join(PUBLIC, 'index.html'));
-const PAGE_CSP = (() => {
-  const hashes = [...PAGE.toString('utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)]
+const cspFor = (html) => {
+  const hashes = [...html.toString('utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)]
     .map(m => `'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`);
-  return ["default-src 'none'", `script-src ${hashes.join(' ')}`,
+  return ["default-src 'none'", `script-src 'self' ${hashes.join(' ')}`,
     "style-src 'unsafe-inline' https://fonts.googleapis.com", 'font-src https://fonts.gstatic.com',
     "connect-src 'self'", "img-src 'self'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'"].join('; ');
-})();
+};
+const PAGES = Object.fromEntries([['/', 'index.html'], ['/index.html', 'index.html'], ['/scoring', 'scoring.html']]
+  .map(([route, file]) => { const html = fs.readFileSync(path.join(PUBLIC, file)); return [route, { html, csp: cspFor(html) }]; }));
 const send = (res, code, obj) => {
   res.writeHead(code, { ...BASE_HEADERS, 'content-type': 'application/json', 'cache-control': 'no-store' });
   res.end(JSON.stringify(obj));
@@ -273,6 +282,11 @@ const server = http.createServer(async (req, res) => {
         db.prepare('DELETE FROM quests WHERE id = ?').run(id); // events are kept; re-adding the quest restores its finishes
         return send(res, 200, { ok: true });
       }
+      if (req.method === 'PUT' && p === '/api/scoring') {
+        const cfg = Scoring.sanitize(await json(req));
+        setSetting('scoring', cfg);
+        return send(res, 200, { ok: true, scoring: cfg });
+      }
       if (req.method === 'POST' && p === '/api/events') {
         // Manual backfill, e.g. when the NAS was down. `at` is an ISO time.
         const body = await json(req);
@@ -295,12 +309,13 @@ const server = http.createServer(async (req, res) => {
 
     const icon = ICONS[p];
     if (req.method === 'GET' && icon) {
-      res.writeHead(200, { ...BASE_HEADERS, 'content-type': icon[1], 'cache-control': 'public, max-age=604800' });
+      res.writeHead(200, { ...BASE_HEADERS, 'content-type': icon[1], 'cache-control': icon[0].endsWith('.js') ? 'no-cache' : 'public, max-age=604800' });
       return fs.createReadStream(path.join(PUBLIC, icon[0])).pipe(res);
     }
-    if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
-      res.writeHead(200, { ...BASE_HEADERS, 'content-security-policy': PAGE_CSP, 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
-      return res.end(PAGE);
+    const page = req.method === 'GET' && PAGES[p];
+    if (page) {
+      res.writeHead(200, { ...BASE_HEADERS, 'content-security-policy': page.csp, 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
+      return res.end(page.html);
     }
     send(res, 404, { error: 'not found' });
   } catch (e) {
