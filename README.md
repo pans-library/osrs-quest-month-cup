@@ -2,6 +2,13 @@
 
 A self-hosted scoreboard for a friendly race through Old School RuneScape's Quest Month (November 2026). Each player runs the [Dink](https://github.com/pajlads/DinkPlugin) RuneLite plugin. The moment the quest complete scroll appears, Dink posts the completion to this server, and the scoreboard updates for everyone. Nobody types anything in, and the order of finishes comes from when the server received each one.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img alt="Scoreboard with five players ranked by points, and three quest cards listing each player's finish position, time and points." src="docs/screenshot-light.png">
+</picture>
+
+<sub>Example data. The real surprise quests are named on release day.</sub>
+
 - One small Docker container: Node 26 LTS, no dependencies, SQLite on a volume.
 - Published to the internet through a Cloudflare Tunnel, so no ports are opened on your router.
 - Viewing is public and read-only. Only the organiser, who has a key, can add players and quests.
@@ -153,7 +160,10 @@ Your RSN on the cup roster must match your in-game name. Capitals, spaces and un
 
 ## Operating notes
 
-- **Keep the webhook URL private.** Anyone who has it can post fake completions. Only RSNs on the roster count, but if the URL leaks, change `WEBHOOK_TOKEN` and send the new URL to your players.
+- **Keep the webhook URL private.** Anyone who has it can post fake completions. Only RSNs on the roster count, but if the URL leaks, change `WEBHOOK_TOKEN` and send the new URL to your players. Send it by direct message, not in a public Discord channel.
+- **Keep the organiser key private.** If it leaks, change `ADMIN_TOKEN` and restart the container; the old key stops working immediately. The page remembers the key in the browser until you click **Lock organiser tools**, so lock it on shared computers.
+- **What's public.** Anyone with the scoreboard address can see the roster RSNs and finish times, including through `/api/state`. The webhook link and organiser key are never shown to visitors.
+- **Updating.** New images include security fixes. With Docker Compose, run `docker compose pull && docker compose up -d`. On TrueNAS, use the app's **Update** button, or redeploy to pull the latest image.
 - **If the server goes down**, completions sent during that time are lost. Dink doesn't resend them. Keep Discord as a second webhook so there's a record, and use **Log a finish by hand** in the organiser tools to backfill each one with its time.
 - **Backups**: the whole database is `cup.sqlite` in `/data`. Stop the container first so everything has been written to that file, then copy it out:
   - Docker Compose with the bind mount: copy `data/cup.sqlite`.
@@ -163,6 +173,10 @@ Your RSN on the cup roster must match your in-game name. Capitals, spaces and un
 ## Updates
 
 Dependabot checks weekly for new versions of the Node base image, the pinned `cloudflared` image and the GitHub Actions used to build. If you run from the TrueNAS YAML above, bump the `cloudflared` tag there when the repository's tag changes. Cloudflare supports each `cloudflared` release for about a year.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability privately.
 
 ## Configuration
 
@@ -174,6 +188,7 @@ Dependabot checks weekly for new versions of the Node base image, the pinned `cl
 | `PORT`          | no       | `8080`                  | Listen port inside the container |
 | `DATA_DIR`      | no       | `/data`                 | Where `cup.sqlite` lives |
 | `SEED_FILE`     | no       | `seed/quests.json` in the image | Quests to preload, see Preloaded quests |
+| `MAX_EVENTS`    | no       | `20000`                 | Stop storing webhook posts after this many, to protect the disk if the webhook link leaks |
 | `TUNNEL_TOKEN`  | compose  |                         | Cloudflare Tunnel token for the bundled cloudflared |
 
 ## Local development
