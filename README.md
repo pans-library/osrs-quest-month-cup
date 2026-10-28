@@ -2,7 +2,7 @@
 
 A self-hosted scoreboard for a friendly race through Old School RuneScape's Quest Month (November 2026). Each player runs the [Dink](https://github.com/pajlads/DinkPlugin) RuneLite plugin. The moment the quest complete scroll appears, Dink posts the completion to this server, and the scoreboard updates for everyone. Nobody types anything in, and the order of finishes comes from when the server received each one.
 
-- One small Docker container: Node 22, no dependencies, SQLite on a volume.
+- One small Docker container: Node 26 LTS, no dependencies, SQLite on a volume.
 - Published to the internet through a Cloudflare Tunnel, so no ports are opened on your router.
 - Viewing is public and read-only. Only the organiser, who has a key, can add players and quests.
 
@@ -84,7 +84,7 @@ services:
     volumes:
       - /mnt/<pool>/apps/quest-cup:/data
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.10.4
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
@@ -131,6 +131,10 @@ Your RSN on the cup roster must match your in-game name. Capitals, spaces and un
 - **Backups**: the whole database is `data/cup.sqlite` (or your TrueNAS dataset). Copy it while the container is stopped, or use `sqlite3 cup.sqlite ".backup copy.sqlite"`.
 - **Cloudflare Access** works if you want the scoreboard private. Add a **Bypass** policy for the path `/hook/*`, because Dink can't sign in.
 
+## Updates
+
+Dependabot checks weekly for new versions of the Node base image, the pinned `cloudflared` image and the GitHub Actions used to build. If you run from the TrueNAS YAML above, bump the `cloudflared` tag there when the repository's tag changes. Cloudflare supports each `cloudflared` release for about a year.
+
 ## Configuration
 
 | Variable        | Required | Default                 | Purpose |
@@ -148,7 +152,7 @@ Your RSN on the cup roster must match your in-game name. Capitals, spaces and un
 WEBHOOK_TOKEN=devhook0123456789 ADMIN_TOKEN=devadmin0123456789 CUP_START=2020-01-01T00:00:00Z DATA_DIR=./data node server.js
 ```
 
-Requires Node 22.13 or newer, for the built-in `node:sqlite`.
+Requires Node 22.13 or newer, for the built-in `node:sqlite`. The container uses Node 26 LTS.
 
 ---
 
