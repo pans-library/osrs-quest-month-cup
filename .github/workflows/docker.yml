@@ -16,6 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Node version matches Dockerfile
+        run: |
+          want=$(tr -d '[:space:]' < .node-version)
+          have=$(sed -n 's/^FROM node:\([0-9]*\).*/\1/p' Dockerfile)
+          echo ".node-version=$want Dockerfile=$have"
+          test "$want" = "$have"
+
       - uses: docker/setup-buildx-action@v4
 
       # Build for this runner only and smoke-test it before anything is published.

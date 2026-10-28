@@ -152,7 +152,7 @@ Dependabot checks weekly for new versions of the Node base image, the pinned `cl
 WEBHOOK_TOKEN=devhook0123456789 ADMIN_TOKEN=devadmin0123456789 CUP_START=2020-01-01T00:00:00Z DATA_DIR=./data node server.js
 ```
 
-Requires Node 22.13 or newer, for the built-in `node:sqlite`. The container uses Node 26 LTS.
+Use Node 26 to match the container. `.node-version` pins it for fnm, mise, nodenv and asdf; with nvm, run `nvm use $(cat .node-version)`. Node 22.13 or newer also works, since that is the first release with `node:sqlite` available without a flag.
 
 ---
 
