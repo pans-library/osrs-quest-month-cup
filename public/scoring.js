@@ -6,7 +6,10 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
+  const LINEAR = { mode: 'linear' };
   const STANDARD = { mode: 'standard' };
+  const DEFAULT = LINEAR; // used when nothing is configured
+  const MODES = ['linear', 'standard', 'dynamic', 'custom'];
   const STANDARD_POINTS = [10, 6, 4, 3, 2];
   const STANDARD_AFTER = 1;
   const DYNAMIC_DEFAULTS = { perPlayer: 2, keep: 0.5, floor: 1 };
@@ -20,12 +23,14 @@
     return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
   };
 
-  // Turn anything (stored JSON, a request body) into a valid config. Unknown input becomes Standard.
+  // Turn anything (stored JSON, a request body) into a valid config. Unknown input becomes the default.
   function sanitize(cfg) {
-    if (!cfg || typeof cfg !== 'object') return { ...STANDARD };
+    if (!cfg || typeof cfg !== 'object') return { ...DEFAULT };
+    if (cfg.mode === 'linear') return { ...LINEAR };
+    if (cfg.mode === 'standard') return { ...STANDARD };
     if (cfg.mode === 'custom') {
       const pts = (Array.isArray(cfg.points) ? cfg.points : []).slice(0, 50).map(p => clampInt(p, 0, 1000, 0));
-      if (!pts.length) return { ...STANDARD };
+      if (!pts.length) return { ...DEFAULT };
       return { mode: 'custom', points: pts, after: clampInt(cfg.after, 0, 1000, 0) };
     }
     if (cfg.mode === 'dynamic') {
@@ -36,7 +41,7 @@
         floor: clampInt(cfg.floor, 0, 10, DYNAMIC_DEFAULTS.floor),
       };
     }
-    return { ...STANDARD };
+    return { ...DEFAULT };
   }
 
   // Points for finishing in `place` (1-based) when `players` are on the roster.
@@ -44,6 +49,7 @@
     const c = sanitize(cfg);
     const n = Math.max(2, players | 0);
     if (c.mode === 'custom') return place <= c.points.length ? c.points[place - 1] : c.after;
+    if (c.mode === 'linear') return Math.max(1, n - place + 1); // n players: n, n-1, … 1
     if (c.mode === 'dynamic') {
       // First place is worth perPlayer x roster size; each place keeps `keep` of the one above.
       const top = Math.max(1, Math.round(c.perPlayer * n));
@@ -59,7 +65,7 @@
   // Short label, e.g. "10 · 6 · 4 · 3 · 2, then 1".
   function describe(cfg, players) {
     const c = sanitize(cfg);
-    if (c.mode === 'dynamic') {
+    if (c.mode === 'dynamic' || c.mode === 'linear') {
       const t = table(c, players, Math.min(players, 6));
       return `${t.join(' · ')}${players > 6 ? ' …' : ''} for ${players} players`;
     }
@@ -70,7 +76,6 @@
 
   // Reference curves for comparison in the lab. Not stored; the organiser can copy one as Custom.
   const REFERENCES = {
-    linear: (players) => ({ mode: 'custom', points: Array.from({ length: players }, (_, i) => players - i), after: 1 }),
     racing: () => ({ mode: 'custom', points: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1], after: 0 }),
   };
 
@@ -145,6 +150,6 @@
     };
   }
 
-  return { STANDARD, STANDARD_POINTS, STANDARD_AFTER, DYNAMIC_DEFAULTS, REFERENCES,
+  return { LINEAR, STANDARD, DEFAULT, MODES, STANDARD_POINTS, STANDARD_AFTER, DYNAMIC_DEFAULTS, REFERENCES,
     sanitize, pointsFor, table, describe, total, scenarios, play, checks, metrics };
 });

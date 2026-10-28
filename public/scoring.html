@@ -120,7 +120,7 @@ svg text { fill: var(--muted); font-family: var(--f-data); font-size: 11px; }
 
   <section class="panel" aria-labelledby="schemes-h">
     <h2 id="schemes-h">Schemes</h2>
-    <p class="note">Standard and Dynamic are built in. Edit Custom to try your own list. Linear and Racing are for comparison; Racing is Formula 1's 25-18-15… table.</p>
+    <p class="note">Linear (the default), Standard and Dynamic are built in. Edit Custom to try your own list. Racing is Formula 1's 25-18-15… table, for comparison.</p>
     <div class="schemes" id="schemes"></div>
   </section>
 
@@ -169,7 +169,7 @@ const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return
 
 let key = '';
 try { key = localStorage.getItem('cup-organiser-key') || ''; } catch {}
-let current = S.sanitize(null), admin = false;
+let current = S.sanitize(null), admin = false, locked = false;
 const draft = {
   custom: { mode: 'custom', points: [12, 6, 4, 3, 2], after: 1 },
   dynamic: { mode: 'dynamic', ...S.DYNAMIC_DEFAULTS },
@@ -177,10 +177,10 @@ const draft = {
 
 function schemes(n) {
   return [
+    { id: 'linear', name: 'Linear', color: 'var(--s4)', cfg: S.LINEAR },
     { id: 'standard', name: 'Standard', color: 'var(--s1)', cfg: S.STANDARD },
     { id: 'dynamic', name: 'Dynamic', color: 'var(--s2)', cfg: draft.dynamic, editable: true },
     { id: 'custom', name: 'Custom', color: 'var(--s3)', cfg: draft.custom, editable: true },
-    { id: 'linear', name: 'Linear', color: 'var(--s4)', cfg: S.REFERENCES.linear(n), reference: true },
     { id: 'racing', name: 'Racing', color: 'var(--s5)', cfg: S.REFERENCES.racing(), reference: true },
   ];
 }
@@ -193,6 +193,7 @@ async function load() {
     const st = await (await fetch('/api/state', { headers })).json();
     current = S.sanitize(st.scoring);
     admin = !!st.admin;
+    locked = !!st.scoringLocked;
     if (current.mode === 'custom') draft.custom = current;
     if (current.mode === 'dynamic') draft.dynamic = current;
     if (st.players.length >= 2) { $('players').value = Math.min(15, st.players.length); }
@@ -207,7 +208,8 @@ function render() {
   $('players-out').value = n; $('quests-out').value = q;
   const list = schemes(n);
   const inUse = list.find(s => !s.reference && same(s.cfg, current));
-  $('in-use').textContent = `The cup is using ${inUse ? inUse.name : 'a custom scheme'}: ${S.describe(current, n)}.`;
+  $('in-use').textContent = `The cup is using ${inUse ? inUse.name : 'a custom scheme'}: ${S.describe(current, n)}.`
+    + (locked ? ' Set by the server\'s SCORING setting, so it can only be changed there.' : '');
   renderSchemes(list, n);
   renderChart(list, n);
   renderChecks(list, n, q);
@@ -249,7 +251,7 @@ function renderSchemes(list, n) {
         el('span', { class: 'note' }, 'Grows with the roster: more players, bigger prize for 1st.'));
     }
     if (s.reference) card.append(el('button', { type: 'button', onclick: () => { draft.custom = S.sanitize(s.cfg); render(); } }, 'Copy to Custom'));
-    if (admin && !s.reference && !using) {
+    if (admin && !locked && !s.reference && !using) {
       card.append(el('button', { class: 'primary', type: 'button', onclick: async () => {
         try {
           const r = await fetch('/api/scoring', { method: 'PUT', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key }, body: JSON.stringify(s.cfg) });

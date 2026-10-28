@@ -8,6 +8,7 @@ services:
       WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:?set WEBHOOK_TOKEN in .env}
       ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}
       CUP_START: ${CUP_START:-2026-11-01T00:00:00Z}
+      SCORING: ${SCORING:-}
     deploy:
       resources:
         limits:

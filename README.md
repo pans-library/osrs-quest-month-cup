@@ -15,17 +15,25 @@ A self-hosted scoreboard for a friendly race through Old School RuneScape's Ques
 
 ## Scoring
 
-Each quest is scored on its own, by finish order:
-
-| Place  | 1st | 2nd | 3rd | 4th | 5th | 6th and later |
-|--------|-----|-----|-----|-----|-----|---------------|
-| Points | 10  | 6   | 4   | 3   | 2   | 1             |
+Each quest is scored on its own, by finish order. By default scoring is **Linear**: with *n* players on the roster, 1st scores *n*, 2nd scores *n* − 1, and so on down to 1. With five players that's 5 · 4 · 3 · 2 · 1.
 
 Players are ranked by total points. Ties go to whoever has more first places, then more second places, and so on.
 
-The organiser can switch scoring at any time from the **Scoring lab** (`/scoring`, linked from the word "Scoring" on the board). Standings recalculate from the stored finishes, so nothing is lost by switching.
+Pick the scheme in one of two ways:
 
-- **Standard**: the table above.
+- **`SCORING` setting.** Set it in the container's environment and it's fixed until you change it and restart. The scoring lab then shows the scheme but can't change it. Use a mode name, or JSON for your own numbers:
+  ```yaml
+  SCORING: "linear"        # or "standard" or "dynamic"
+  SCORING: '{"mode":"custom","points":[12,6,4,3,2],"after":1}'
+  SCORING: '{"mode":"dynamic","perPlayer":3,"keep":0.5,"floor":1}'
+  ```
+  A value the server doesn't understand stops it at startup with a message, rather than quietly using the default.
+- **Scoring lab.** If `SCORING` isn't set, the organiser can switch at any time from the lab (`/scoring`, linked from the word "Scoring" on the board).
+
+Either way, standings recalculate from the stored finishes, so nothing is lost by switching.
+
+- **Linear** (default): *n* down to 1, as above. Every place is worth one point more than the next, so steady finishes add up as much as wins.
+- **Standard**: 10 · 6 · 4 · 3 · 2, then 1 for everyone after.
 - **Custom**: your own list of points for 1st, 2nd, 3rd…, plus a value for everyone after.
 - **Dynamic**: grows with the roster. 1st is worth a set number of points per player, each place keeps a share of the place above, and there's a minimum for finishing. With the defaults, 5 players score 10 · 5 · 3 · 1 · 1 and 10 players score 20 for a win.
 
@@ -96,6 +104,8 @@ services:
       WEBHOOK_TOKEN: "<your webhook token>"
       ADMIN_TOKEN: "<your admin token>"
       CUP_START: "2026-11-01T00:00:00Z"
+      # Optional: fix the scoring scheme (see Scoring). Leave out to choose it in the scoring lab.
+      # SCORING: "linear"
     volumes:
       - cup-data:/data
     deploy:
@@ -214,6 +224,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability privately.
 | `DATA_DIR`      | no       | `/data`                 | Where `cup.sqlite` lives |
 | `SEED_FILE`     | no       | `seed/quests.json` in the image | Quests to preload, see Preloaded quests |
 | `MAX_INFLIGHT_MB` | no     | `48`                    | Upload data held in memory at once; extra uploads get "busy" (HTTP 503) |
+| `SCORING`       | no       | unset (Linear, changeable in the scoring lab) | Fix the scoring scheme: `linear`, `standard`, `dynamic`, or JSON. See Scoring |
 | `MAX_EVENTS`    | no       | `20000`                 | Stop storing webhook posts after this many, to protect the disk if the webhook link leaks |
 | `TUNNEL_TOKEN`  | compose  |                         | Cloudflare Tunnel token for the bundled cloudflared |
 
