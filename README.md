@@ -68,9 +68,9 @@ docker compose logs -f cup
 
 ### 3b. Run on TrueNAS SCALE (Apps → Discover Apps → Custom App → Install via YAML)
 
-First, create a dataset for the database, for example `/mnt/<pool>/apps/quest-cup`. The container runs as UID 1000, so give that user write access in the dataset's permissions. In the TrueNAS shell you can do this with `chown 1000:1000 /mnt/<pool>/apps/quest-cup`.
+Paste the YAML below, with your own values filled in. This copy lives only on your NAS, so the secrets never touch the repository.
 
-Then paste the YAML below, with your own values filled in. This copy lives only on your NAS, so the secrets never touch the repository.
+The database goes in a named Docker volume, `cup-data`, which TrueNAS keeps with the app. You don't need to create a dataset or set permissions: on first start, Docker gives the new volume the same owner as `/data` in the image, which is the container's own user.
 
 ```yaml
 services:
@@ -82,7 +82,7 @@ services:
       ADMIN_TOKEN: "<your admin token>"
       CUP_START: "2026-11-01T00:00:00Z"
     volumes:
-      - /mnt/<pool>/apps/quest-cup:/data
+      - cup-data:/data
   cloudflared:
     image: cloudflare/cloudflared:2026.10.4
     restart: unless-stopped
@@ -91,9 +91,14 @@ services:
       TUNNEL_TOKEN: "<your tunnel token>"
     depends_on:
       - cup
+
+volumes:
+  cup-data:
 ```
 
-If you already run the TrueNAS **cloudflared** app, leave out the `cloudflared` service. Add `ports: ["8080:8080"]` to `cup` instead, and point the tunnel's public hostname at `http://<nas-lan-ip>:8080`.
+If you already run the TrueNAS **cloudflared** app, leave out the `cloudflared` service. Instead, publish a port on `cup`, for example `ports: ["30080:8080"]`, and point the tunnel's public hostname at `http://<nas-lan-ip>:30080`. Any free host port works; TrueNAS apps conventionally use 30000 and up.
+
+Deleting the app can also delete its volume, and the cup's history with it. Back up the database first if you want to keep it (see Operating notes).
 
 ### 4. Check it
 
@@ -128,7 +133,9 @@ Your RSN on the cup roster must match your in-game name. Capitals, spaces and un
 
 - **Keep the webhook URL private.** Anyone who has it can post fake completions. Only RSNs on the roster count, but if the URL leaks, change `WEBHOOK_TOKEN` and send the new URL to your players.
 - **If the server goes down**, completions sent during that time are lost. Dink doesn't resend them. Keep Discord as a second webhook so there's a record, and use **Log a finish by hand** in the organiser tools to backfill each one with its time.
-- **Backups**: the whole database is `data/cup.sqlite` (or your TrueNAS dataset). Copy it while the container is stopped, or use `sqlite3 cup.sqlite ".backup copy.sqlite"`.
+- **Backups**: the whole database is `cup.sqlite` in `/data`. Stop the container first so everything has been written to that file, then copy it out:
+  - Docker Compose with the bind mount: copy `data/cup.sqlite`.
+  - Named volume (TrueNAS): stop the app, then in the TrueNAS shell find the container with `docker ps -a | grep cup` and run `docker cp <container>:/data/cup.sqlite ./cup.sqlite`.
 - **Cloudflare Access** works if you want the scoreboard private. Add a **Bypass** policy for the path `/hook/*`, because Dink can't sign in.
 
 ## Updates
