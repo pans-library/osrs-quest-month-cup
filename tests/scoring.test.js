@@ -4,6 +4,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const S = require('../public/scoring.js');
 
+test('linear scoring is the default: n players score n down to 1', () => {
+  assert.deepEqual(S.sanitize(null), { mode: 'linear' });
+  assert.deepEqual(S.table(S.DEFAULT, 5), [5, 4, 3, 2, 1]);
+  assert.deepEqual(S.table({ mode: 'linear' }, 3), [3, 2, 1]);
+  assert.equal(S.pointsFor({ mode: 'linear' }, 9, 5), 1); // never below 1 for a finish
+});
+
 test('standard scoring matches 10/6/4/3/2 then 1', () => {
   assert.deepEqual(S.table(S.STANDARD, 8), [10, 6, 4, 3, 2, 1, 1, 1]);
 });
@@ -19,10 +26,11 @@ test('dynamic scoring scales the top with roster size and halves by default', ()
   assert.equal(S.pointsFor({ mode: 'dynamic' }, 1, 10), 20);
 });
 
-test('sanitize clamps and falls back to standard', () => {
-  assert.deepEqual(S.sanitize(null), { mode: 'standard' });
-  assert.deepEqual(S.sanitize({ mode: 'nonsense' }), { mode: 'standard' });
-  assert.deepEqual(S.sanitize({ mode: 'custom', points: [] }), { mode: 'standard' });
+test('sanitize clamps and falls back to the default', () => {
+  assert.deepEqual(S.sanitize(null), S.DEFAULT);
+  assert.deepEqual(S.sanitize({ mode: 'nonsense' }), S.DEFAULT);
+  assert.deepEqual(S.sanitize({ mode: 'custom', points: [] }), S.DEFAULT);
+  assert.deepEqual(S.sanitize({ mode: 'standard', points: [1] }), { mode: 'standard' });
   assert.deepEqual(S.sanitize({ mode: 'custom', points: [5000, -3, '7', 'x'], after: 2.6 }),
     { mode: 'custom', points: [1000, 0, 7, 0], after: 3 });
   assert.equal(S.sanitize({ mode: 'custom', points: Array(80).fill(1) }).points.length, 50);

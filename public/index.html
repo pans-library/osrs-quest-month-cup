@@ -261,14 +261,14 @@ const pointsFor = (place) => CupScoring.pointsFor(state.scoring, place, rosterSi
 function scoringSteps() {
   const c = CupScoring.sanitize(state.scoring), n = rosterSize();
   const listLen = c.mode === 'custom' ? c.points.length : c.mode === 'standard' ? CupScoring.STANDARD_POINTS.length : 0;
-  const t = CupScoring.table(c, n, c.mode === 'dynamic' ? n : Math.max(n, listLen + 1));
+  const t = CupScoring.table(c, n, c.mode === 'dynamic' || c.mode === 'linear' ? n : Math.max(n, listLen + 1));
   let tail = t.length - 1;
   while (tail > 0 && t[tail - 1] === t[t.length - 1]) tail--;
   return t.slice(0, tail + 1).map((pts, i) => ({ label: i === tail && tail < t.length - 1 ? `${ordinal(i + 1)}+` : ordinal(i + 1), pts }));
 }
 const REFRESH_MS = 60000;
 
-let state = { players: [], quests: [], finishes: [], scoring: { mode: 'standard' }, admin: false };
+let state = { players: [], quests: [], finishes: [], scoring: CupScoring.DEFAULT, admin: false };
 let key = '';
 try { key = localStorage.getItem('cup-organiser-key') || ''; } catch {}
 

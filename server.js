@@ -71,7 +71,21 @@ class UserError extends Error {}
 /* ---------- settings ---------- */
 const getSetting = (key) => { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? JSON.parse(r.value) : undefined; };
 const setSetting = (key, value) => db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, JSON.stringify(value));
-const scoring = () => Scoring.sanitize(getSetting('scoring'));
+// SCORING in the environment fixes the scheme: a mode name (linear, standard, dynamic) or JSON such as
+// {"mode":"custom","points":[12,6,4,3,2],"after":1}. When set, the organiser can't change it from the page.
+const ENV_SCORING = (() => {
+  const raw = (process.env.SCORING || '').trim();
+  if (!raw) return null;
+  let cfg;
+  try { cfg = raw.startsWith('{') ? JSON.parse(raw) : { mode: raw.toLowerCase() }; } catch { cfg = null; }
+  const clean = cfg && Scoring.MODES.includes(cfg.mode) ? Scoring.sanitize(cfg) : null;
+  if (!clean || clean.mode !== cfg.mode) {
+    console.error(`SCORING must be one of ${Scoring.MODES.filter(m => m !== 'custom').join(', ')}, or JSON like {"mode":"custom","points":[12,6,4,3,2],"after":1}. Got: ${raw.slice(0, 200)}`);
+    process.exit(1);
+  }
+  return clean;
+})();
+const scoring = () => ENV_SCORING || Scoring.sanitize(getSetting('scoring'));
 
 /* ---------- seed ---------- */
 // Quests in the seed file are added once each. A seeded quest the organiser later
@@ -119,7 +133,7 @@ function state(includeAdmin) {
     }
   }
 
-  const out = { players, quests, finishes, scoring: scoring(), cupStart: CUP_START, admin: !!includeAdmin };
+  const out = { players, quests, finishes, scoring: scoring(), scoringLocked: !!ENV_SCORING, cupStart: CUP_START, admin: !!includeAdmin };
   if (includeAdmin) {
     out.hookPath = '/hook/' + WEBHOOK_TOKEN; // shown only to the organiser, for sharing with players
     // Quest names seen from roster players that aren't on the cup list yet.
@@ -284,6 +298,7 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
       if (req.method === 'PUT' && p === '/api/scoring') {
+        if (ENV_SCORING) return send(res, 409, { error: 'Scoring is set by the server\'s SCORING setting. Change it there and restart.' });
         const cfg = Scoring.sanitize(await json(req));
         setSetting('scoring', cfg);
         return send(res, 200, { ok: true, scoring: cfg });
@@ -334,5 +349,5 @@ server.headersTimeout = 15_000;
 // Last line of defence: log and keep serving rather than exiting on an unexpected rejection.
 process.on('unhandledRejection', (e) => console.error('unhandled rejection:', e && e.message));
 
-server.listen(PORT, () => console.log(`Quest Month Cup listening on :${PORT} (counting events from ${CUP_START})`));
+server.listen(PORT, () => console.log(`Quest Month Cup listening on :${PORT} (counting events from ${CUP_START}; scoring ${ENV_SCORING ? `${ENV_SCORING.mode} from SCORING` : `${scoring().mode}`})`));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { server.close(); db.close(); process.exit(0); });
