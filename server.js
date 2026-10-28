@@ -147,13 +147,14 @@ function extractPayload(req, body) {
 }
 
 const countEvents = db.prepare('SELECT COUNT(*) AS n FROM events');
-const dinkDuplicate = db.prepare(`SELECT 1 FROM events WHERE rsn_norm = ? AND quest_norm = ? AND seasonal = ? AND source = 'dink'`);
+// Only events from the cup itself count as earlier finishes, so a pre-start test post can't block the real one.
+const dinkDuplicate = db.prepare(`SELECT 1 FROM events WHERE rsn_norm = ? AND quest_norm = ? AND seasonal = ? AND source = 'dink' AND at >= ?`);
 function recordDink(p) {
   if (!p || typeof p !== 'object' || p.type !== 'QUEST') return 'ignored';
   const rsn = str(p.playerName).trim(), quest = str(p.extra && p.extra.questName).trim();
   if (!rsn || !quest || rsn.length > MAX_RSN || quest.length > MAX_QUEST) return 'ignored';
   const seasonal = p.seasonalWorld === true ? 1 : 0;
-  if (dinkDuplicate.get(norm(rsn), norm(quest), seasonal)) return 'duplicate'; // only the first completion counts anyway
+  if (dinkDuplicate.get(norm(rsn), norm(quest), seasonal, CUP_START)) return 'duplicate'; // only the first completion counts anyway
   if (countEvents.get().n >= MAX_EVENTS) { console.error(`Event limit (${MAX_EVENTS}) reached; ignoring webhook posts.`); return 'ignored'; }
   // Keep only small, known fields from the payload.
   const slim = JSON.stringify({ accountType: str(p.accountType).slice(0, 32), seasonalWorld: !!seasonal,
