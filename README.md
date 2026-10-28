@@ -98,7 +98,7 @@ The database goes in a named Docker volume, `cup-data`, which TrueNAS keeps with
 ```yaml
 services:
   cup:
-    image: ghcr.io/pans-library/osrs-quest-month-cup:latest
+    image: ghcr.io/pans-library/osrs-quest-month-cup:1
     restart: unless-stopped
     environment:
       WEBHOOK_TOKEN: "<your webhook token>"
@@ -205,7 +205,10 @@ Your RSN on the cup roster must match your in-game name. Capitals, spaces and un
   - Named volume (TrueNAS): stop the app, then in the TrueNAS shell find the container with `docker ps -a | grep cup` and run `docker cp <container>:/data/cup.sqlite ./cup.sqlite`.
 - **Cloudflare Access** works if you want the scoreboard private. Add a **Bypass** policy for the path `/hook/*`, because Dink can't sign in.
 
-## Updates
+## Versions and updates
+
+Each release publishes the image under three tags: the exact version (`1.0.0`), the minor line (`1.0`) and the major line (`1`). The examples here use `:1`, which picks up fixes and new features in later 1.x releases but never a breaking change. Pin `:1.0.0` if you want nothing to change until you edit it, or use `:latest` to follow `main`. See [CHANGELOG.md](CHANGELOG.md) for what each release contains.
+
 
 Dependabot checks weekly for new versions of the Node base image, the pinned `cloudflared` image and the GitHub Actions used to build. If you run from the TrueNAS YAML above, bump the `cloudflared` tag there when the repository's tag changes. Cloudflare supports each `cloudflared` release for about a year.
 

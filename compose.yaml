@@ -1,6 +1,6 @@
 services:
   cup:
-    image: ghcr.io/pans-library/osrs-quest-month-cup:latest
+    image: ghcr.io/pans-library/osrs-quest-month-cup:1
     # To build from source instead, replace the line above with:  build: .
     restart: unless-stopped
     # Only the cup's own settings; the tunnel token stays with cloudflared.
