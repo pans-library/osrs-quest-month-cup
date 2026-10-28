@@ -90,10 +90,25 @@ services:
       CUP_START: "2026-11-01T00:00:00Z"
     volumes:
       - cup-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 384M
+          pids: 100
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
   cloudflared:
     image: cloudflare/cloudflared:2026.10.4
     restart: unless-stopped
     command: tunnel --no-autoupdate run
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
     environment:
       TUNNEL_TOKEN: "<your tunnel token>"
     depends_on:
@@ -104,6 +119,8 @@ volumes:
 ```
 
 If you already run the TrueNAS **cloudflared** app, leave out the `cloudflared` service. Instead, publish a port on `cup`, for example `ports: ["30080:8080"]`, and point the tunnel's public hostname at `http://<nas-lan-ip>:30080`. Any free host port works; TrueNAS apps conventionally use 30000 and up.
+
+The `deploy.resources.limits` block keeps the cup from taking more than one CPU core and 384 MB of memory. It idles at about 50 MB. The server also limits how much upload data it holds at once (`MAX_INFLIGHT_MB`), refusing extra uploads with "busy" rather than growing past the limit. The other settings run it with a read-only filesystem and no extra privileges.
 
 Deleting the app can also delete its volume, and the cup's history with it. Back up the database first if you want to keep it (see Operating notes).
 
@@ -188,6 +205,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability privately.
 | `PORT`          | no       | `8080`                  | Listen port inside the container |
 | `DATA_DIR`      | no       | `/data`                 | Where `cup.sqlite` lives |
 | `SEED_FILE`     | no       | `seed/quests.json` in the image | Quests to preload, see Preloaded quests |
+| `MAX_INFLIGHT_MB` | no     | `48`                    | Upload data held in memory at once; extra uploads get "busy" (HTTP 503) |
 | `MAX_EVENTS`    | no       | `20000`                 | Stop storing webhook posts after this many, to protect the disk if the webhook link leaks |
 | `TUNNEL_TOKEN`  | compose  |                         | Cloudflare Tunnel token for the bundled cloudflared |
 

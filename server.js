@@ -16,6 +16,7 @@ const CUP_START = process.env.CUP_START || '2026-11-01T00:00:00Z'; // ignore que
 const SEED_FILE = process.env.SEED_FILE || path.join(__dirname, 'seed', 'quests.json');
 const WIKI_BASE = 'https://oldschool.runescape.wiki/w/';
 const MAX_BODY = 12 * 1024 * 1024; // Dink screenshots are capped at 8 MB
+const MAX_INFLIGHT = Number(process.env.MAX_INFLIGHT_MB || 48) * 1024 * 1024; // request bytes held in memory at once
 const MAX_EVENTS = Number(process.env.MAX_EVENTS || 20000); // stop accepting webhook posts past this many stored events
 const MAX_RSN = 12, MAX_QUEST = 100; // in-game names are at most 12 characters
 
@@ -195,12 +196,25 @@ const isAdmin = (req) => {
   const h = req.headers.authorization || '';
   return h.startsWith('Bearer ') && safeEqual(h.slice(7), ADMIN_TOKEN);
 };
+// Bodies are buffered, so the total held across all requests is capped. Past the cap a request
+// gets 503 instead of the process growing until the container's memory limit kills it.
+let inflight = 0;
+class BusyError extends Error {}
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    const chunks = []; let size = 0;
-    req.on('data', (c) => { size += c.length; if (size > MAX_BODY) { reject(new Error('too large')); req.destroy(); } else chunks.push(c); });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
+    const chunks = []; let size = 0, done = false;
+    const release = () => { if (!done) { done = true; inflight -= size; } };
+    const fail = (e) => { release(); reject(e); req.resume(); };
+    req.on('data', (c) => {
+      if (done) return;
+      size += c.length; inflight += c.length;
+      if (size > MAX_BODY) return fail(new Error('too large'));
+      if (inflight > MAX_INFLIGHT) return fail(new BusyError('busy'));
+      chunks.push(c);
+    });
+    req.on('end', () => { if (done) return; release(); resolve(Buffer.concat(chunks)); });
+    req.on('error', fail);
+    req.on('close', release);
   });
 }
 const json = async (req) => {
@@ -290,8 +304,10 @@ const server = http.createServer(async (req, res) => {
     }
     send(res, 404, { error: 'not found' });
   } catch (e) {
-    if (!(e instanceof UserError)) console.error(`${req.method} ${p.startsWith('/hook/') ? '/hook/***' : logSafe(p).slice(0, 200)}: ${e.message}`);
+    if (!(e instanceof UserError) && !(e instanceof BusyError)) console.error(`${req.method} ${p.startsWith('/hook/') ? '/hook/***' : logSafe(p).slice(0, 200)}: ${e.message}`);
     if (e instanceof UserError) return send(res, 400, { error: e.message });
+    if (e instanceof BusyError) { res.setHeader('retry-after', '5'); return send(res, 503, { error: 'Server busy, try again shortly.' }); }
+    if (e.message === 'too large') return send(res, 413, { error: 'Request too large.' });
     send(res, e instanceof SyntaxError ? 400 : 500, { error: e instanceof SyntaxError ? 'Malformed request body.' : 'Server error.' });
   }
 });

@@ -8,6 +8,12 @@ services:
       WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:?set WEBHOOK_TOKEN in .env}
       ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}
       CUP_START: ${CUP_START:-2026-11-01T00:00:00Z}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 384M
+          pids: 100
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -22,6 +28,11 @@ services:
     image: cloudflare/cloudflared:2026.10.4
     restart: unless-stopped
     command: tunnel --no-autoupdate run
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
     depends_on:
