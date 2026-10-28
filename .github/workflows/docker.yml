@@ -1,0 +1,89 @@
+name: Publish container image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Node version matches Dockerfile
+        run: |
+          want=$(tr -d '[:space:]' < .node-version)
+          have=$(sed -n 's/^FROM node:\([0-9]*\).*/\1/p' Dockerfile)
+          echo ".node-version=$want Dockerfile=$have"
+          test "$want" = "$have"
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Build for this runner only and smoke-test it before anything is published.
+      - name: Build test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: cup:test
+
+      - name: Smoke test
+        run: |
+          docker run -d --name cup -p 8080:8080 \
+            -e WEBHOOK_TOKEN=ci-webhook-token-0123456789 \
+            -e ADMIN_TOKEN=ci-admin-token-0123456789 \
+            -e CUP_START=2000-01-01T00:00:00Z cup:test
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:8080/healthz && break; sleep 1; done
+          auth='authorization: Bearer ci-admin-token-0123456789'
+          curl -fs -X POST http://127.0.0.1:8080/api/players -H "$auth" -H 'content-type: application/json' -d '{"rsn":"Test Player"}'
+          curl -fs -X POST http://127.0.0.1:8080/api/quests  -H "$auth" -H 'content-type: application/json' -d '{"name":"Test Quest"}'
+          curl -fs -X POST http://127.0.0.1:8080/hook/ci-webhook-token-0123456789 -H 'content-type: application/json' \
+            -d '{"type":"QUEST","playerName":"test_player","seasonalWorld":false,"extra":{"questName":"Test Quest"}}'
+          curl -fs http://127.0.0.1:8080/api/state | tee state.json
+          python3 -c "import json; d=json.load(open('state.json')); assert len(d['finishes']) == 1, d"
+
+      - name: Container logs
+        if: always()
+        run: docker logs cup || true
+
+  publish:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

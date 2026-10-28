@@ -1,0 +1,20 @@
+services:
+  cup:
+    image: ghcr.io/pans-library/osrs-quest-month-cup:latest
+    # To build from source instead, replace the line above with:  build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    # Uncomment to reach the page on your LAN without the tunnel (http://<host>:8080)
+    # ports:
+    #   - "8080:8080"
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.4
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - cup
