@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scoring Lab · Quest Month Cup</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Alegreya+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: same stone-panel system as the scoreboard. Scheme columns run left to right in every
+   section (curve, checks, matchups), so a scheme can be read top to bottom and compared across. */
+:root {
+  --bg: #1d1914; --panel: #2b251d; --panel-2: #352d23; --line: #4d4233;
+  --fg: #e9dfc9; --muted: #a8997d; --gold: #f0c64a;
+  --good: #3fd56b; --bad: #ff5a4a; --meh: #f2e14b;
+  /* one colour per scheme column */
+  --s1: #f0c64a; --s2: #4fc3c8; --s3: #c58cf0; --s4: #9aa6b8; --s5: #f08a5a;
+  --f-display: "Pixelify Sans", "Courier New", monospace;
+  --f-body: "Alegreya Sans", "Trebuchet MS", system-ui, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #ece3cf; --panel: #f7f0df; --panel-2: #efe5cd; --line: #cdbd98;
+    --fg: #2a2117; --muted: #6e5f45; --gold: #9a6a00;
+    --good: #17803a; --bad: #b42318; --meh: #8a7400;
+    --s1: #9a6a00; --s2: #127a80; --s3: #7a3fb0; --s4: #4f5d72; --s5: #b2481a; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #ece3cf; --panel: #f7f0df; --panel-2: #efe5cd; --line: #cdbd98;
+  --fg: #2a2117; --muted: #6e5f45; --gold: #9a6a00;
+  --good: #17803a; --bad: #b42318; --meh: #8a7400;
+  --s1: #9a6a00; --s2: #127a80; --s3: #7a3fb0; --s4: #4f5d72; --s5: #b2481a; color-scheme: light;
+}
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 17px; line-height: 1.45; }
+[hidden] { display: none !important; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; display: grid; gap: 24px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font-family: var(--f-data); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.eyebrow a { color: inherit; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(32px, 6vw, 48px); line-height: 1; margin: 0; color: var(--gold); text-wrap: balance; }
+h2 { font-family: var(--f-display); font-weight: 500; font-size: 22px; margin: 0; color: var(--gold); }
+.lede { margin: 0; color: var(--muted); max-width: 68ch; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 18px; display: grid; gap: 14px; min-width: 0; align-content: start; }
+.note { color: var(--muted); font-size: 15px; margin: 0; max-width: 72ch; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+thead th { font-family: var(--f-data); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
+th[scope=row] { font-weight: 500; min-width: 15em; }
+.num { text-align: right; font-family: var(--f-data); font-size: 14px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+
+/* controls */
+.controls { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: end; }
+.field { display: grid; gap: 4px; }
+.field label, .lbl { font-family: var(--f-data); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.field output { font-family: var(--f-display); font-size: 22px; color: var(--fg); }
+input, button { font: inherit; font-size: 15px; }
+input[type=text], input[type=number] { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; min-width: 0; }
+input[type=range] { width: 180px; accent-color: var(--gold); }
+button { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 3px; padding: 6px 12px; cursor: pointer; }
+button.primary { background: var(--gold); color: #1d1914; border-color: var(--gold); font-weight: 700; }
+button:hover { border-color: var(--gold); }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* scheme cards */
+.schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; }
+.scheme { border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 4px; padding: 12px; display: grid; gap: 8px; align-content: start; background: var(--panel-2); min-width: 0; }
+.scheme h3 { margin: 0; font-family: var(--f-display); font-weight: 500; font-size: 18px; color: var(--c); }
+.scheme .pts { font-family: var(--f-data); font-size: 13px; overflow-wrap: anywhere; }
+.scheme .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.scheme .row input[type=text] { flex: 1 1 120px; }
+.scheme .row input[type=number] { width: 4.5em; }
+.badge { font-family: var(--f-data); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; border: 1px solid currentColor; border-radius: 2px; padding: 1px 5px; color: var(--good); justify-self: start; }
+.err { color: var(--bad); font-size: 14px; margin: 0; min-height: 1em; }
+
+/* chart */
+svg text { fill: var(--muted); font-family: var(--f-data); font-size: 11px; }
+.grid line { stroke: var(--line); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 15px; }
+
+/* verdict cells */
+.v { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-data); font-size: 14px; white-space: nowrap; }
+.v .mark { font-weight: 700; width: 1.2em; display: inline-block; text-align: center; }
+.ok { color: var(--good); } .bad { color: var(--bad); } .meh { color: var(--meh); }
+.detail { display: block; font-family: var(--f-data); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.vs { font-size: 14px; color: var(--muted); display: block; }
+.places { display: inline-flex; gap: 2px; margin-top: 4px; flex-wrap: wrap; }
+.places i { font-style: normal; font-family: var(--f-data); font-size: 10px; min-width: 1.9em; text-align: center; padding: 1px 2px; border-radius: 2px; background: var(--panel-2); border: 1px solid var(--line); }
+.places i.p1 { border-color: var(--gold); color: var(--gold); }
+.places i.dnf { color: var(--muted); border-style: dashed; }
+.win { font-weight: 700; color: var(--fg); }
+.lose { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow"><a href="/">Quest Month Cup</a> · Scoring lab</div>
+    <h1>Scoring lab</h1>
+    <p class="lede">Every quest is scored on its own by finish order. This page runs the same made-up seasons through several scoring schemes side by side, so you can see which ones reward what, and where a scheme lets an odd strategy win.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="season-h">
+    <h2 id="season-h">Season to test</h2>
+    <div class="controls">
+      <div class="field"><label for="players">Players</label><input type="range" id="players" min="2" max="15" value="5"><output id="players-out" for="players">5</output></div>
+      <div class="field"><label for="quests">Quests</label><input type="range" id="quests" min="2" max="12" value="6"><output id="quests-out" for="quests">6</output></div>
+      <p class="note" id="in-use"></p>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="schemes-h">
+    <h2 id="schemes-h">Schemes</h2>
+    <p class="note">Standard and Dynamic are built in. Edit Custom to try your own list. Linear and Racing are for comparison; Racing is Formula 1's 25-18-15… table.</p>
+    <div class="schemes" id="schemes"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="curve-h">
+    <h2 id="curve-h">Points by place</h2>
+    <div class="legend" id="legend"></div>
+    <div class="scroll"><svg id="chart" role="img" aria-labelledby="curve-h" width="760" height="300"></svg></div>
+    <div class="scroll"><table id="points-table"></table></div>
+  </section>
+
+  <section class="panel" aria-labelledby="checks-h">
+    <h2 id="checks-h">Checks</h2>
+    <p class="note">Rules most groups would want a scheme to follow. A cross means the scheme breaks the rule for this season.</p>
+    <div class="scroll"><table id="checks"></table></div>
+  </section>
+
+  <section class="panel" aria-labelledby="matchups-h">
+    <h2 id="matchups-h">Matchups</h2>
+    <p class="note">Two players with fixed results over the season. A tick or cross means the scheme agrees or disagrees with the expected winner. A question mark is a judgement call: there's no right answer, but it shows which style each scheme rewards.</p>
+    <div class="scroll"><table id="matchups"></table></div>
+  </section>
+
+  <section class="panel" aria-labelledby="shape-h">
+    <h2 id="shape-h">Shape</h2>
+    <p class="note"><b>Share to 1st</b> is how much of a quest's points go to the winner. <b>1st ÷ 2nd</b> is how much a win is worth over runner-up. <b>Swing</b> is the most one quest can change a gap between two players.</p>
+    <div class="scroll"><table id="metrics"></table></div>
+  </section>
+</div>
+
+<script src="/scoring.js"></script>
+<script>
+const S = CupScoring;
+const $ = (id) => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, props = {}, ...kids) => {
+  const n = tag.startsWith('svg:') ? document.createElementNS(NS, tag.slice(4)) : document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') n.setAttribute('class', v);
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k);
+  return n;
+};
+const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+
+let key = '';
+try { key = localStorage.getItem('cup-organiser-key') || ''; } catch {}
+let current = S.sanitize(null), admin = false;
+const draft = {
+  custom: { mode: 'custom', points: [12, 6, 4, 3, 2], after: 1 },
+  dynamic: { mode: 'dynamic', ...S.DYNAMIC_DEFAULTS },
+};
+
+function schemes(n) {
+  return [
+    { id: 'standard', name: 'Standard', color: 'var(--s1)', cfg: S.STANDARD },
+    { id: 'dynamic', name: 'Dynamic', color: 'var(--s2)', cfg: draft.dynamic, editable: true },
+    { id: 'custom', name: 'Custom', color: 'var(--s3)', cfg: draft.custom, editable: true },
+    { id: 'linear', name: 'Linear', color: 'var(--s4)', cfg: S.REFERENCES.linear(n), reference: true },
+    { id: 'racing', name: 'Racing', color: 'var(--s5)', cfg: S.REFERENCES.racing(), reference: true },
+  ];
+}
+const same = (a, b) => JSON.stringify(S.sanitize(a)) === JSON.stringify(S.sanitize(b));
+
+/* ---------- data ---------- */
+async function load() {
+  const headers = key ? { authorization: 'Bearer ' + key } : {};
+  try {
+    const st = await (await fetch('/api/state', { headers })).json();
+    current = S.sanitize(st.scoring);
+    admin = !!st.admin;
+    if (current.mode === 'custom') draft.custom = current;
+    if (current.mode === 'dynamic') draft.dynamic = current;
+    if (st.players.length >= 2) { $('players').value = Math.min(15, st.players.length); }
+    if (st.quests.length >= 2) { $('quests').value = Math.min(12, st.quests.length); }
+  } catch { /* the lab still works offline with defaults */ }
+  render();
+}
+
+/* ---------- render ---------- */
+function render() {
+  const n = +$('players').value, q = +$('quests').value;
+  $('players-out').value = n; $('quests-out').value = q;
+  const list = schemes(n);
+  const inUse = list.find(s => !s.reference && same(s.cfg, current));
+  $('in-use').textContent = `The cup is using ${inUse ? inUse.name : 'a custom scheme'}: ${S.describe(current, n)}.`;
+  renderSchemes(list, n);
+  renderChart(list, n);
+  renderChecks(list, n, q);
+  renderMatchups(list, n, q);
+  renderMetrics(list, n);
+}
+
+function renderSchemes(list, n) {
+  // Don't rebuild while someone is typing in a scheme's inputs.
+  if ($('schemes').contains(document.activeElement) && document.activeElement.tagName === 'INPUT') {
+    for (const s of list) { const p = document.querySelector(`[data-pts="${s.id}"]`); if (p) p.textContent = S.table(s.cfg, n).join(' · '); }
+    return;
+  }
+  $('schemes').replaceChildren(...list.map(s => {
+    const using = !s.reference && same(s.cfg, current);
+    const err = el('p', { class: 'err' });
+    const card = el('div', { class: 'scheme', style: `--c:${s.color}` },
+      el('h3', {}, s.name),
+      using ? el('span', { class: 'badge' }, 'In use') : null,
+      el('div', { class: 'pts', 'data-pts': s.id }, S.table(s.cfg, n).join(' · ')));
+    if (s.id === 'custom') {
+      card.append(
+        el('div', { class: 'row' }, el('label', { class: 'lbl', for: 'custom-points' }, 'Points'),
+          el('input', { type: 'text', id: 'custom-points', value: draft.custom.points.join(', '), inputmode: 'numeric', 'aria-describedby': 'custom-help',
+            oninput: (e) => { const pts = e.target.value.split(/[\s,]+/).filter(Boolean).map(Number); if (pts.length && pts.every(Number.isFinite)) { draft.custom = S.sanitize({ ...draft.custom, points: pts }); render(); } } })),
+        el('div', { class: 'row' }, el('label', { class: 'lbl', for: 'custom-after' }, 'Then everyone'),
+          el('input', { type: 'number', id: 'custom-after', min: 0, max: 1000, value: draft.custom.after,
+            oninput: (e) => { draft.custom = S.sanitize({ ...draft.custom, after: e.target.value }); render(); } })),
+        el('span', { class: 'note', id: 'custom-help' }, 'Points for 1st, 2nd, 3rd… separated by commas.'));
+    }
+    if (s.id === 'dynamic') {
+      const num = (id, label, field, attrs) => el('div', { class: 'row' }, el('label', { class: 'lbl', for: id }, label),
+        el('input', { type: 'number', id, value: draft.dynamic[field], ...attrs,
+          oninput: (e) => { draft.dynamic = S.sanitize({ ...draft.dynamic, [field]: e.target.value }); render(); } }));
+      card.append(
+        num('dyn-per', '1st = players ×', 'perPlayer', { min: 0.5, max: 20, step: 0.5 }),
+        num('dyn-keep', 'Each place keeps', 'keep', { min: 0.1, max: 0.95, step: 0.05 }),
+        num('dyn-floor', 'Minimum', 'floor', { min: 0, max: 10, step: 1 }),
+        el('span', { class: 'note' }, 'Grows with the roster: more players, bigger prize for 1st.'));
+    }
+    if (s.reference) card.append(el('button', { type: 'button', onclick: () => { draft.custom = S.sanitize(s.cfg); render(); } }, 'Copy to Custom'));
+    if (admin && !s.reference && !using) {
+      card.append(el('button', { class: 'primary', type: 'button', onclick: async () => {
+        try {
+          const r = await fetch('/api/scoring', { method: 'PUT', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key }, body: JSON.stringify(s.cfg) });
+          const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not save.');
+          current = S.sanitize(d.scoring); render();
+        } catch (x) { err.textContent = x.message; }
+      } }, 'Use for the cup'), err);
+    }
+    return card;
+  }));
+}
+
+function renderChart(list, n) {
+  const svg = $('chart'), W = 760, H = 300, L = 44, R = 16, T = 14, B = 34;
+  const places = Math.max(2, n);
+  const max = Math.max(1, ...list.flatMap(s => S.table(s.cfg, n)));
+  const step = max > 40 ? 10 : max > 16 ? 5 : max > 8 ? 2 : 1;
+  const top = Math.ceil(max / step) * step;
+  const x = (p) => L + ((p - 1) / Math.max(1, places - 1)) * (W - L - R);
+  const y = (v) => T + (1 - v / top) * (H - T - B);
+  const kids = [];
+  const grid = el('svg:g', { class: 'grid' });
+  for (let v = 0; v <= top; v += step) {
+    grid.append(el('svg:line', { x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+    kids.push(el('svg:text', { x: L - 8, y: y(v) + 4, 'text-anchor': 'end' }, String(v)));
+  }
+  for (let p = 1; p <= places; p++) kids.push(el('svg:text', { x: x(p), y: H - B + 18, 'text-anchor': 'middle' }, ordinal(p)));
+  kids.push(el('svg:text', { x: (L + W - R) / 2, y: H - 2, 'text-anchor': 'middle' }, 'Finish place'));
+  for (const s of list) {
+    const t = S.table(s.cfg, n);
+    const pts = t.map((v, i) => `${x(i + 1)},${y(v)}`).join(' ');
+    kids.push(el('svg:polyline', { points: pts, fill: 'none', stroke: s.color, 'stroke-width': s.reference ? 1.5 : 2.5, 'stroke-dasharray': s.reference ? '5 4' : null, 'stroke-linejoin': 'round' }));
+    for (let i = 0; i < t.length; i++) kids.push(el('svg:circle', { cx: x(i + 1), cy: y(t[i]), r: s.reference ? 2.5 : 3.5, fill: s.color }, el('svg:title', {}, `${s.name}: ${ordinal(i + 1)} = ${t[i]}`)));
+  }
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.replaceChildren(el('svg:title', {}, 'Points awarded for each finish place, one line per scheme'), grid, ...kids);
+  $('legend').replaceChildren(...list.map(s => el('span', {}, el('span', { class: 'swatch', style: `background:${s.color}` }), s.name, s.reference ? ' (reference)' : '')));
+
+  const head = el('tr', {}, el('th', { scope: 'col' }, 'Place'), ...list.map(s => el('th', { scope: 'col', class: 'num' }, el('span', { class: 'swatch', style: `background:${s.color}` }), s.name)));
+  const rows = Array.from({ length: places }, (_, i) => el('tr', {}, el('th', { scope: 'row' }, ordinal(i + 1)),
+    ...list.map(s => el('td', { class: 'num' }, String(S.pointsFor(s.cfg, i + 1, n))))));
+  $('points-table').replaceChildren(el('thead', {}, head), el('tbody', {}, ...rows));
+}
+
+const colHead = (list, first) => el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, first),
+  ...list.map(s => el('th', { scope: 'col' }, el('span', { class: 'swatch', style: `background:${s.color}` }), s.name))));
+
+function renderChecks(list, n, q) {
+  const byScheme = list.map(s => S.checks(s.cfg, n, q));
+  const rows = byScheme[0].map((c, i) => el('tr', {}, el('th', { scope: 'row' }, c.label),
+    ...byScheme.map(cs => { const r = cs[i]; return el('td', {},
+      el('span', { class: `v ${r.ok ? 'ok' : 'bad'}` }, el('span', { class: 'mark', 'aria-label': r.ok ? 'pass' : 'fail' }, r.ok ? '✓' : '✗')),
+      el('span', { class: 'detail' }, r.detail)); })));
+  const passes = el('tr', {}, el('th', { scope: 'row' }, 'Passed'),
+    ...byScheme.map(cs => el('td', { class: 'num' }, `${cs.filter(c => c.ok).length} of ${cs.length}`)));
+  $('checks').replaceChildren(colHead(list, 'Rule'), el('tbody', {}, ...rows, passes));
+}
+
+function placesStrip(places, n) {
+  return el('span', { class: 'places', 'aria-hidden': 'true' }, ...places.map(p =>
+    el('i', { class: p == null ? 'dnf' : p === 1 ? 'p1' : '' }, p == null ? '–' : p === n ? 'L' : ordinal(p))));
+}
+
+function renderMatchups(list, n, q) {
+  const rows = S.scenarios(n, q).map(sc => el('tr', {},
+    el('th', { scope: 'row' }, sc.title,
+      el('span', { class: 'vs' }, `A: ${sc.a.label}`), placesStrip(sc.a.places, sc.players),
+      el('span', { class: 'vs' }, `B: ${sc.b.label}`), placesStrip(sc.b.places, sc.players),
+      el('span', { class: 'detail' }, sc.note)),
+    ...list.map(s => {
+      const r = S.play(s.cfg, sc);
+      const mark = r.ok === null ? ['?', 'meh', 'judgement call'] : r.ok ? ['✓', 'ok', 'as expected'] : ['✗', 'bad', 'unexpected winner'];
+      return el('td', {}, el('span', { class: 'v' },
+        el('span', { class: `mark ${mark[1]}`, 'aria-label': mark[2] }, mark[0]),
+        el('span', { class: r.winner === 'a' ? 'win' : 'lose' }, `A ${r.a}`), '–',
+        el('span', { class: r.winner === 'b' ? 'win' : 'lose' }, `${r.b} B`)),
+        el('span', { class: 'detail' }, r.winner === 'tie' ? 'tie' : `${r.winner.toUpperCase()} by ${Math.abs(r.a - r.b)}`));
+    })));
+  $('matchups').replaceChildren(colHead(list, 'Season'), el('tbody', {}, ...rows));
+}
+
+function renderMetrics(list, n) {
+  const ms = list.map(s => S.metrics(s.cfg, n));
+  const row = (label, f) => el('tr', {}, el('th', { scope: 'row' }, label), ...ms.map(m => el('td', { class: 'num' }, f(m))));
+  $('metrics').replaceChildren(colHead(list, 'Measure'), el('tbody', {},
+    row('Points for 1st', m => String(m.top)),
+    row('Share to 1st', m => `${m.winShare}%`),
+    row('1st ÷ 2nd', m => m.winOverSecond == null ? '–' : `×${m.winOverSecond}`),
+    row('Swing', m => String(m.swing))));
+}
+
+$('players').addEventListener('input', render);
+$('quests').addEventListener('input', render);
+render();
+load();
+</script>
+</body>
+</html>
